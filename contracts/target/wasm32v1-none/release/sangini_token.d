@@ -1,0 +1,1 @@
+E:\sangini\contracts\target\wasm32v1-none\release\sangini_token.wasm: E:\sangini\contracts\token\src\admin.rs E:\sangini\contracts\token\src\allowance.rs E:\sangini\contracts\token\src\balance.rs E:\sangini\contracts\token\src\contract.rs E:\sangini\contracts\token\src\lib.rs E:\sangini\contracts\token\src\metadata.rs E:\sangini\contracts\token\src\storage_types.rs
