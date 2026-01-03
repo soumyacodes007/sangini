@@ -18,7 +18,7 @@ use soroban_sdk::{
 use types::{Invoice, InvoiceStatus, Dispute, DisputeResolution, TokenHolding};
 use storage::{
     get_invoice, set_invoice, get_admin, set_admin, 
-    get_token_holdings, set_token_holding, remove_token_holding,
+    set_token_holding, remove_token_holding,
     get_kyc_status, set_kyc_status, get_rate_config, set_rate_config,
     InvoiceKey, DataKey,
 };

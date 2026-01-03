@@ -41,16 +41,4 @@ pub enum ContractError {
     
     /// Token holding not found
     HoldingNotFound = 12,
-    
-    /// Invoice has expired
-    InvoiceExpired = 13,
-    
-    /// Settlement already completed
-    AlreadySettled = 14,
-    
-    /// Invalid due date
-    InvalidDueDate = 15,
-    
-    /// Investor already has maximum holding
-    MaxHoldingReached = 16,
 }

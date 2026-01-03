@@ -1,0 +1,1 @@
+E:\sangini\contracts\target\wasm32v1-none\release\sangini_invoice.wasm: E:\sangini\contracts\invoice\src\errors.rs E:\sangini\contracts\invoice\src\events.rs E:\sangini\contracts\invoice\src\lib.rs E:\sangini\contracts\invoice\src\storage.rs E:\sangini\contracts\invoice\src\types.rs
