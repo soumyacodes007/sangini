@@ -576,6 +576,25 @@ impl SanginiInvoiceContract {
         Ok(())
     }
 
+    /// Update USDC token address (only admin can call)
+    pub fn set_usdc_token_address(
+        env: Env,
+        admin: Address,
+        new_token: Address,
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+
+        // Verify caller is admin
+        let stored_admin = get_admin(&env);
+        if stored_admin != admin {
+            return Err(ContractError::Unauthorized);
+        }
+
+        storage::set_usdc_token(&env, &new_token);
+
+        Ok(())
+    }
+
     /// Check if an investor is KYC approved
     pub fn is_kyc_approved(env: Env, investor: Address) -> bool {
         get_kyc_status(&env, &investor)
@@ -622,17 +641,28 @@ impl SanginiInvoiceContract {
         storage::set_invoice_counter(env, counter + 1);
         
         // Format: "INV-1001", "INV-1002", etc.
-        let mut id_bytes = [0u8; 10];
+        let num = counter + 1001;
+        
+        // Convert number to string manually
+        let mut digits = [0u8; 4];
+        let mut n = num;
+        for i in (0..4).rev() {
+            digits[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+        }
+        
+        // Build the full ID: "INV-" + 4 digits
+        let mut id_bytes = [0u8; 8];
         id_bytes[0] = b'I';
         id_bytes[1] = b'N';
         id_bytes[2] = b'V';
         id_bytes[3] = b'-';
+        id_bytes[4] = digits[0];
+        id_bytes[5] = digits[1];
+        id_bytes[6] = digits[2];
+        id_bytes[7] = digits[3];
         
-        let num = counter + 1001;
-        let digits = Self::num_to_digits(num);
-        id_bytes[4..4 + digits.len()].copy_from_slice(&digits);
-        
-        String::from_str(env, core::str::from_utf8(&id_bytes[..4 + digits.len()]).unwrap())
+        String::from_str(env, core::str::from_utf8(&id_bytes).unwrap())
     }
 
     fn num_to_digits(mut num: u32) -> [u8; 6] {
