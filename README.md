@@ -2,7 +2,7 @@
 
 **Sangini** is a decentralized invoice financing platform built on the Stellar Soroban blockchain. It enables suppliers to tokenize their invoices as Real-World Assets (RWAs) and access instant liquidity from global investors.
 
-![Sangini Hero](https://i.imgur.com/your-hero-image-placeholder.png)
+
 
 ## � The Problem
 
