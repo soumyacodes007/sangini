@@ -51,9 +51,9 @@ export default function AdminPage() {
 
             // Clear form
             setInvestorAddress("")
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('KYC approval failed:', err)
-            setError(err.message || 'Failed to approve KYC. Are you the contract admin?')
+            setError(err instanceof Error ? err.message : 'Failed to approve KYC. Are you the contract admin?')
         } finally {
             setIsLoading(false)
         }
@@ -91,7 +91,7 @@ export default function AdminPage() {
                         <div>
                             <CardTitle>Investor KYC Approval</CardTitle>
                             <CardDescription>
-                                Approve an investor's KYC to allow them to purchase invoice tokens.
+                                Approve an investor&apos;s KYC to allow them to purchase invoice tokens.
                             </CardDescription>
                         </div>
                     </div>

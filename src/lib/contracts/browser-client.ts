@@ -3,7 +3,7 @@
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
-import { CONTRACT_CONFIG, Invoice, InvoiceStatus, Dispute, TokenHolding } from './config';
+import { CONTRACT_CONFIG, Invoice, InvoiceStatus } from './config';
 
 const { Contract, rpc, TransactionBuilder, Networks, scValToNative, nativeToScVal } = StellarSdk;
 
@@ -17,6 +17,7 @@ const invoiceContract = new Contract(CONTRACT_CONFIG.INVOICE_CONTRACT);
 export async function submitWithFreighter(
     sourcePublicKey: string,
     operation: StellarSdk.xdr.Operation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
     const account = await server.getAccount(sourcePublicKey);
 
@@ -62,6 +63,7 @@ export async function submitWithFreighter(
 async function simulateReadOnly(
     operation: StellarSdk.xdr.Operation,
     source: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
     const account = await server.getAccount(source);
 
@@ -199,12 +201,20 @@ export async function getInvoice(
             verifiedAt: Number(result.verified_at),
             settledAt: Number(result.settled_at),
             status: result.status as InvoiceStatus,
-            tokenSymbol: result.token_symbol,
-            totalTokens: result.total_tokens.toString(),
-            description: result.description,
-            purchaseOrder: result.purchase_order,
-            repaymentReceived: result.repayment_received.toString(),
-            buyerSignedAt: Number(result.buyer_signed_at),
+            tokenSymbol: result.token_symbol || '',
+            totalTokens: result.total_tokens?.toString() || '0',
+            tokensSold: result.tokens_sold?.toString() || '0',
+            tokensRemaining: result.tokens_remaining?.toString() || '0',
+            description: result.description || '',
+            purchaseOrder: result.purchase_order || '',
+            documentHash: result.document_hash || '',
+            repaymentReceived: result.repayment_received?.toString() || '0',
+            buyerSignedAt: Number(result.buyer_signed_at || 0),
+            auctionStart: Number(result.auction_start || 0),
+            auctionEnd: Number(result.auction_end || 0),
+            startPrice: result.start_price?.toString() || '0',
+            minPrice: result.min_price?.toString() || '0',
+            priceDropRate: Number(result.price_drop_rate || 0),
         };
     } catch (error) {
         console.error('Failed to get invoice:', error);

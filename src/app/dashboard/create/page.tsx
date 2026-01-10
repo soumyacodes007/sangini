@@ -4,7 +4,7 @@ import * as React from "react"
 import { useStore } from "@/lib/store"
 import { useFreighterWallet } from "@/hooks/useFreighterWallet"
 import { mintDraftBrowser } from "@/lib/contracts/browser-client"
-import { CONTRACT_CONFIG, InvoiceStatus } from "@/lib/contracts/config"
+import { InvoiceStatus } from "@/lib/contracts/config"
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,11 +19,12 @@ export default function CreateInvoicePage() {
     const [isLoading, setIsLoading] = React.useState(false)
     const [error, setError] = React.useState<string | null>(null)
 
-    // Form State
+    // Form State - dynamic default date (90 days from now)
+    const defaultDueDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const [amount, setAmount] = React.useState("10000")
-    const [buyerAddress, setBuyerAddress] = React.useState(CONTRACT_CONFIG.TEST_ACCOUNTS.BUYER)
-    const [dueDate, setDueDate] = React.useState("2025-05-01")
-    const [description, setDescription] = React.useState("Consulting Services - Q1 2025")
+    const [buyerAddress, setBuyerAddress] = React.useState("")
+    const [dueDate, setDueDate] = React.useState(defaultDueDate)
+    const [description, setDescription] = React.useState("")
 
     const handleMint = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -67,10 +68,18 @@ export default function CreateInvoicePage() {
                 status: InvoiceStatus.Draft,
                 tokenSymbol: '',
                 totalTokens: '0',
+                tokensSold: '0',
+                tokensRemaining: '0',
                 description,
                 purchaseOrder,
+                documentHash: '',
                 repaymentReceived: '0',
-                buyerSignedAt: 0
+                buyerSignedAt: 0,
+                auctionStart: 0,
+                auctionEnd: 0,
+                startPrice: '0',
+                minPrice: '0',
+                priceDropRate: 0,
             })
 
             addNotification({
@@ -80,9 +89,9 @@ export default function CreateInvoicePage() {
             })
 
             router.push('/dashboard')
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Minting failed:', err)
-            setError(err.message || 'Failed to mint invoice. Check console for details.')
+            setError(err instanceof Error ? err.message : 'Failed to mint invoice. Check console for details.')
         } finally {
             setIsLoading(false)
         }

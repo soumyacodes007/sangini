@@ -60,14 +60,15 @@ export default function MarketplacePage() {
                 title: 'Investment Successful!',
                 message: `You have funded invoice ${id} on-chain`
             })
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Investment failed:', err)
+            const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
             addNotification({
                 type: 'error',
                 title: 'Investment Failed',
-                message: err.message || 'Something went wrong'
+                message: errorMessage
             })
-            setError(err.message || 'Failed to fund invoice')
+            setError(errorMessage)
         } finally {
             setInvesting(null)
         }

@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "invoice",
-    "token",
 ]
 
 [workspace.dependencies]
