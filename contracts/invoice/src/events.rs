@@ -134,4 +134,96 @@ impl InvoiceEvents {
             (holder.clone(), amount),
         );
     }
+
+    // ========================================================================
+    // AUCTION EVENTS
+    // ========================================================================
+
+    /// Emitted when an auction is started
+    pub fn auction_started(
+        env: &Env,
+        invoice_id: &String,
+        end_time: u64,
+        start_price: i128,
+        min_price: i128,
+    ) {
+        env.events().publish(
+            (symbol_short!("AUCTION"), invoice_id.clone()),
+            (end_time, start_price, min_price),
+        );
+    }
+
+    /// Emitted when an auction ends
+    pub fn auction_ended(env: &Env, invoice_id: &String, final_price: i128) {
+        env.events().publish(
+            (symbol_short!("AUCTEND"), invoice_id.clone()),
+            final_price,
+        );
+    }
+
+    // ========================================================================
+    // INSURANCE EVENTS
+    // ========================================================================
+
+    /// Emitted when insurance is claimed
+    pub fn insurance_claimed(
+        env: &Env,
+        invoice_id: &String,
+        investor: &Address,
+        amount: i128,
+    ) {
+        env.events().publish(
+            (symbol_short!("INSCLAIM"), invoice_id.clone()),
+            (investor.clone(), amount),
+        );
+    }
+
+    /// Emitted when insurance pool is funded
+    pub fn insurance_funded(env: &Env, amount: i128, new_total: i128) {
+        env.events().publish(
+            (symbol_short!("INSFUND"),),
+            (amount, new_total),
+        );
+    }
+
+    // ========================================================================
+    // ORDER BOOK EVENTS
+    // ========================================================================
+
+    /// Emitted when a sell order is created
+    pub fn order_created(
+        env: &Env,
+        order_id: &String,
+        invoice_id: &String,
+        seller: &Address,
+        token_amount: i128,
+        price_per_token: i128,
+    ) {
+        env.events().publish(
+            (symbol_short!("ORDERCR"), order_id.clone()),
+            (invoice_id.clone(), seller.clone(), token_amount, price_per_token),
+        );
+    }
+
+    /// Emitted when a sell order is filled (fully or partially)
+    pub fn order_filled(
+        env: &Env,
+        order_id: &String,
+        buyer: &Address,
+        token_amount: i128,
+        payment: i128,
+    ) {
+        env.events().publish(
+            (symbol_short!("ORDERFIL"), order_id.clone()),
+            (buyer.clone(), token_amount, payment),
+        );
+    }
+
+    /// Emitted when a sell order is cancelled
+    pub fn order_cancelled(env: &Env, order_id: &String) {
+        env.events().publish(
+            (symbol_short!("ORDERCAN"), order_id.clone()),
+            true,
+        );
+    }
 }

@@ -41,4 +41,31 @@ pub enum ContractError {
     
     /// Token holding not found
     HoldingNotFound = 12,
+    
+    /// Auction has not started yet
+    AuctionNotStarted = 13,
+    
+    /// Auction is not currently active
+    AuctionNotActive = 14,
+    
+    /// Insurance pool has insufficient funds
+    InsufficientInsurancePool = 15,
+    
+    /// Invoice is not in defaulted state
+    NotDefaulted = 16,
+    
+    /// Insurance already claimed for this holding
+    AlreadyClaimed = 17,
+    
+    /// Sell order not found
+    OrderNotFound = 18,
+    
+    /// Order is not active (already filled or cancelled)
+    OrderNotActive = 19,
+    
+    /// Order has already been filled
+    OrderAlreadyFilled = 20,
+    
+    /// Invalid auction parameters
+    InvalidAuctionParams = 21,
 }
