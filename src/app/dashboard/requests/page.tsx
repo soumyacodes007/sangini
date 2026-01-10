@@ -20,6 +20,15 @@ export default function BuyerRequestsPage() {
         (inv) => inv.status === InvoiceStatus.Draft
     )
 
+    const handleReject = (id: string) => {
+        updateInvoice(id, { status: InvoiceStatus.Revoked })
+        addNotification({
+            type: 'info',
+            title: 'Invoice Rejected',
+            message: `Invoice ${id} has been rejected`
+        })
+    }
+
     const handleApprove = async (id: string) => {
         setError(null)
 
@@ -45,9 +54,9 @@ export default function BuyerRequestsPage() {
                 title: 'Invoice Approved!',
                 message: `Invoice ${id} has been verified on-chain`
             })
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Approval failed:', err)
-            setError(err.message || 'Failed to approve invoice')
+            setError(err instanceof Error ? err.message : 'Failed to approve invoice')
         } finally {
             setApproving(null)
         }
@@ -124,7 +133,13 @@ export default function BuyerRequestsPage() {
                                 </div>
                             </CardContent>
                             <CardFooter className="bg-muted/30 flex justify-end gap-3 pt-6">
-                                <Button variant="outline">Reject</Button>
+                                <Button 
+                                    variant="outline"
+                                    onClick={() => handleReject(inv.id)}
+                                    disabled={!!approving}
+                                >
+                                    Reject
+                                </Button>
                                 <Button
                                     onClick={() => handleApprove(inv.id)}
                                     disabled={!!approving || !isConnected}

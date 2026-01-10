@@ -8,12 +8,12 @@ import { Wallet, Loader2, AlertCircle, CheckCircle2, ExternalLink } from "lucide
 
 export function WalletConnect() {
     const wallet = useFreighterWallet()
-    const { connectWallet, disconnectWallet, demoRole } = useStore()
+    const { connectWallet, disconnectWallet } = useStore()
 
     const handleConnect = async () => {
         const success = await wallet.connect()
         if (success && wallet.publicKey) {
-            connectWallet(wallet.publicKey, demoRole)
+            connectWallet(wallet.publicKey)
         }
     }
 

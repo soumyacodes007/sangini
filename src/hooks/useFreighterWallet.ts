@@ -107,11 +107,11 @@ export function useFreighterWallet() {
 
             setIsLoading(false)
             return true
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Freighter connect error:", err)
             setState(prev => ({
                 ...prev,
-                error: err.message || "Failed to connect",
+                error: err instanceof Error ? err.message : "Failed to connect",
             }))
             setIsLoading(false)
             return false

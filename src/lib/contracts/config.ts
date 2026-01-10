@@ -1,35 +1,27 @@
 // Sangini Contract Configuration
-// Updated with deployed testnet addresses
 
 export const CONTRACT_CONFIG = {
-    // Deployed Contract Addresses (Updated 2026-01-05)
-    INVOICE_CONTRACT: 'CCACZ6JQCHM6LQQUEQA2M4FDEYYH3FBQE63UIPKWRO7Y7PEZUK3K5OL3',
-    TOKEN_CONTRACT: 'CCTWGR2JTPOD3RT3SDU3UMMWEO2XEV2LRKUN4OYMEP7DUY46FA4MIQ34',
+    // Contract Addresses - will be updated after new deploy
+    INVOICE_CONTRACT: process.env.NEXT_PUBLIC_INVOICE_CONTRACT || 'CCACZ6JQCHM6LQQUEQA2M4FDEYYH3FBQE63UIPKWRO7Y7PEZUK3K5OL3',
 
     // Network Configuration
-    NETWORK: 'testnet',
-    NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
-    HORIZON_URL: 'https://horizon-testnet.stellar.org',
-    SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
-
-    // Test Accounts (for demo)
-    TEST_ACCOUNTS: {
-        ADMIN: 'GDFCZILMBZBLAOYPKAJEG5ZBYTJ6KU6GAN5Q3APW7LN52XG4S4KGVFOP',
-        SUPPLIER: 'GCWGZTQJBDMS5A7F6OVUSFJIWRNREM6PCYWWIHZG6P6D6GUS7YCPL7FV',
-        BUYER: 'GBBLVFK64B4A5RHEZ2STRG6FFVHPTBXFXMWBFOM5HRDKSZXRDSOQRLI4',
-        INVESTOR: 'GCKFM7PV6E3SY7W6ZZCNCIHLRUHF2K7PRPYP4KC4JBURUUXE66D5RUGX',
-    },
+    NETWORK: process.env.NEXT_PUBLIC_NETWORK || 'testnet',
+    NETWORK_PASSPHRASE: process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015',
+    HORIZON_URL: process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org',
+    SOROBAN_RPC_URL: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org',
 
     // Interest Rates (basis points)
     BASE_INTEREST_RATE: 1000, // 10%
     PENALTY_RATE: 2400, // 24%
     GRACE_PERIOD_DAYS: 30,
+    INSURANCE_CUT_BPS: 500, // 5%
 };
 
 // Invoice Status enum matching contract
 export enum InvoiceStatus {
     Draft = 'Draft',
     Verified = 'Verified',
+    Funding = 'Funding', // Auction active
     Funded = 'Funded',
     Overdue = 'Overdue',
     Settled = 'Settled',
@@ -60,10 +52,19 @@ export interface Invoice {
     status: InvoiceStatus;
     tokenSymbol: string;
     totalTokens: string;
+    tokensSold: string;
+    tokensRemaining: string;
     description: string;
     purchaseOrder: string;
+    documentHash: string;
     repaymentReceived: string;
     buyerSignedAt: number;
+    // Auction fields
+    auctionStart: number;
+    auctionEnd: number;
+    startPrice: string;
+    minPrice: string;
+    priceDropRate: number;
 }
 
 // Dispute Type
@@ -85,11 +86,27 @@ export interface TokenHolding {
     acquiredPrice: string;
 }
 
+// Sell Order Type
+export interface SellOrder {
+    id: string;
+    invoiceId: string;
+    seller: string;
+    tokenAmount: string;
+    pricePerToken: string;
+    tokensRemaining: string;
+    createdAt: number;
+    status: 'Open' | 'PartiallyFilled' | 'Filled' | 'Cancelled';
+}
+
 // Format helpers
-export function formatAmount(amount: string | number, currency = 'INR'): string {
+export function formatAmount(amount: string | number, currency = 'XLM'): string {
     const value = typeof amount === 'string' ? parseFloat(amount) : amount;
-    // Assuming 7 decimal places like Stellar
+    // 7 decimal places like Stellar
     const realValue = value / 10000000;
+
+    if (currency === 'XLM') {
+        return `${realValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} XLM`;
+    }
 
     return new Intl.NumberFormat('en-IN', {
         style: 'currency',
@@ -115,16 +132,17 @@ export function formatAddress(address: string, chars = 8): string {
 
 export function getStatusColor(status: InvoiceStatus): string {
     const colors: Record<InvoiceStatus, string> = {
-        [InvoiceStatus.Draft]: 'badge-draft',
-        [InvoiceStatus.Verified]: 'badge-verified',
-        [InvoiceStatus.Funded]: 'badge-funded',
-        [InvoiceStatus.Overdue]: 'badge-overdue',
-        [InvoiceStatus.Settled]: 'badge-settled',
-        [InvoiceStatus.Defaulted]: 'badge-defaulted',
-        [InvoiceStatus.Disputed]: 'badge-disputed',
-        [InvoiceStatus.Revoked]: 'badge-draft',
+        [InvoiceStatus.Draft]: 'bg-gray-500/20 text-gray-400',
+        [InvoiceStatus.Verified]: 'bg-blue-500/20 text-blue-400',
+        [InvoiceStatus.Funding]: 'bg-amber-500/20 text-amber-400',
+        [InvoiceStatus.Funded]: 'bg-emerald-500/20 text-emerald-400',
+        [InvoiceStatus.Overdue]: 'bg-orange-500/20 text-orange-400',
+        [InvoiceStatus.Settled]: 'bg-emerald-500/20 text-emerald-400',
+        [InvoiceStatus.Defaulted]: 'bg-red-500/20 text-red-400',
+        [InvoiceStatus.Disputed]: 'bg-purple-500/20 text-purple-400',
+        [InvoiceStatus.Revoked]: 'bg-gray-500/20 text-gray-400',
     };
-    return colors[status] || 'badge-draft';
+    return colors[status] || 'bg-gray-500/20 text-gray-400';
 }
 
 export function getDaysUntilDue(dueDate: number): number {
@@ -150,4 +168,28 @@ export function calculateInterest(
     const interest = (principal * rate * daysElapsed) / (10000 * 365);
 
     return (principal + interest).toString();
+}
+
+// Calculate current auction price
+export function calculateAuctionPrice(invoice: Invoice): string {
+    if (!invoice.auctionStart || invoice.status !== InvoiceStatus.Funding) {
+        return invoice.amount;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    
+    // If auction ended, return min price
+    if (now >= invoice.auctionEnd) {
+        return invoice.minPrice;
+    }
+
+    const hoursElapsed = (now - invoice.auctionStart) / 3600;
+    const startPrice = parseFloat(invoice.startPrice);
+    const minPrice = parseFloat(invoice.minPrice);
+    
+    // Calculate price drop
+    const totalDrop = (startPrice * invoice.priceDropRate * hoursElapsed) / 10000;
+    const currentPrice = Math.max(startPrice - totalDrop, minPrice);
+
+    return currentPrice.toString();
 }
