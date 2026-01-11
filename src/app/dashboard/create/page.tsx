@@ -9,8 +9,9 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { FileUpload } from "@/components/ui/file-upload"
 import { useRouter } from "next/navigation"
-import { Loader2, AlertCircle, Wallet } from "lucide-react"
+import { Loader2, AlertCircle, Wallet, FileText, CheckCircle2 } from "lucide-react"
 
 export default function CreateInvoicePage() {
     const router = useRouter()
@@ -25,6 +26,13 @@ export default function CreateInvoicePage() {
     const [buyerAddress, setBuyerAddress] = React.useState("")
     const [dueDate, setDueDate] = React.useState(defaultDueDate)
     const [description, setDescription] = React.useState("")
+    const [documentCid, setDocumentCid] = React.useState<string | null>(null)
+    const [documentName, setDocumentName] = React.useState<string | null>(null)
+
+    const handleDocumentUpload = (cid: string, fileName: string) => {
+        setDocumentCid(cid)
+        setDocumentName(fileName)
+    }
 
     const handleMint = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -32,6 +40,11 @@ export default function CreateInvoicePage() {
 
         if (!isConnected || !publicKey) {
             setError("Please connect your wallet first")
+            return
+        }
+
+        if (!buyerAddress) {
+            setError("Please enter a buyer address")
             return
         }
 
@@ -54,6 +67,19 @@ export default function CreateInvoicePage() {
                 purchaseOrder
             )
 
+            // If we have a document, update the invoice with the document hash
+            if (documentCid && invoiceId) {
+                try {
+                    await fetch(`/api/invoices/${invoiceId}/document`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ documentHash: documentCid }),
+                    })
+                } catch (docErr) {
+                    console.warn('Failed to attach document:', docErr)
+                }
+            }
+
             // Add to local state
             addInvoice({
                 id: invoiceId,
@@ -72,7 +98,7 @@ export default function CreateInvoicePage() {
                 tokensRemaining: '0',
                 description,
                 purchaseOrder,
-                documentHash: '',
+                documentHash: documentCid || '',
                 repaymentReceived: '0',
                 buyerSignedAt: 0,
                 auctionStart: 0,
@@ -174,7 +200,49 @@ export default function CreateInvoicePage() {
                                 value={buyerAddress}
                                 onChange={(e) => setBuyerAddress(e.target.value)}
                                 className="font-mono text-xs"
+                                placeholder="G..."
                             />
+                        </div>
+
+                        {/* Document Upload */}
+                        <div className="space-y-2">
+                            <Label>Supporting Document (Optional)</Label>
+                            <p className="text-xs text-muted-foreground mb-2">
+                                Upload invoice PDF or image for verification. Stored on IPFS.
+                            </p>
+                            {documentCid ? (
+                                <div className="p-4 rounded-lg border bg-emerald-500/5 border-emerald-500/20">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                                            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium">{documentName}</p>
+                                            <p className="text-xs text-muted-foreground font-mono truncate">
+                                                {documentCid}
+                                            </p>
+                                        </div>
+                                        <Button 
+                                            type="button"
+                                            variant="ghost" 
+                                            size="sm"
+                                            onClick={() => {
+                                                setDocumentCid(null)
+                                                setDocumentName(null)
+                                            }}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <FileUpload
+                                    onUpload={handleDocumentUpload}
+                                    accept=".pdf,.png,.jpg,.jpeg"
+                                    maxSize={10}
+                                    disabled={isLoading}
+                                />
+                            )}
                         </div>
 
                         <div className="pt-4">
@@ -189,7 +257,10 @@ export default function CreateInvoicePage() {
                                         Awaiting Signature...
                                     </>
                                 ) : (
-                                    "Mint Draft Invoice (On-Chain)"
+                                    <>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        Mint Draft Invoice (On-Chain)
+                                    </>
                                 )}
                             </Button>
                         </div>

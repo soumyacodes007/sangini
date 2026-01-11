@@ -1,18 +1,29 @@
 "use client"
 
-import { useStore } from "@/lib/store"
+import { useAuth } from "@/hooks/useAuth"
+import { useStats } from "@/hooks/useStats"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowRight, FileText, TrendingUp, PlusCircle, ShieldCheck } from "lucide-react"
+import { ArrowRight, FileText, TrendingUp, PlusCircle, ShieldCheck, Loader2, DollarSign, Briefcase } from "lucide-react"
+import { StatusBadge } from "@/components/ui/status-badge"
 
 export default function DashboardPage() {
-    const { wallet, invoices } = useStore()
+    const { user, userType, isLoading: authLoading } = useAuth()
+    const { stats, loading: statsLoading, error } = useStats()
 
-    const totalInvoices = invoices.length
-    const pendingApprovals = invoices.filter(i => i.status === 'Draft').length
-    const activeAuctions = invoices.filter(i => i.status === 'Funding').length
-    const fundedInvoices = invoices.filter(i => i.status === 'Funded').length
+    const isLoading = authLoading || statsLoading
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        )
+    }
+
+    const platform = stats?.platform
+    const userStats = stats?.user
 
     return (
         <div className="p-8 space-y-8">
@@ -20,11 +31,23 @@ export default function DashboardPage() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
                     <p className="text-muted-foreground mt-1">
-                        {wallet.isConnected ? "Welcome back!" : "Connect your wallet to get started"}
+                        Welcome back{user?.name ? `, ${user.name}` : ''}!
                     </p>
                 </div>
+                {userType && (
+                    <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                        {userType}
+                    </span>
+                )}
             </div>
 
+            {error && (
+                <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
+                    {error}
+                </div>
+            )}
+
+            {/* Platform Stats */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -32,7 +55,7 @@ export default function DashboardPage() {
                         <FileText className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{totalInvoices}</div>
+                        <div className="text-2xl font-bold">{platform?.totalInvoices || 0}</div>
                         <p className="text-xs text-muted-foreground">On-chain invoices</p>
                     </CardContent>
                 </Card>
@@ -43,7 +66,7 @@ export default function DashboardPage() {
                         <ShieldCheck className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{pendingApprovals}</div>
+                        <div className="text-2xl font-bold">{platform?.invoicesByStatus?.DRAFT || 0}</div>
                         <p className="text-xs text-muted-foreground">Awaiting verification</p>
                     </CardContent>
                 </Card>
@@ -54,23 +77,100 @@ export default function DashboardPage() {
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{activeAuctions}</div>
+                        <div className="text-2xl font-bold">{platform?.invoicesByStatus?.FUNDING || 0}</div>
                         <p className="text-xs text-muted-foreground">Open for investment</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Funded</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-emerald-500" />
+                        <CardTitle className="text-sm font-medium">Insurance Pool</CardTitle>
+                        <ShieldCheck className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-emerald-500">{fundedInvoices}</div>
-                        <p className="text-xs text-muted-foreground">Successfully funded</p>
+                        <div className="text-2xl font-bold text-emerald-500">
+                            {platform?.insurancePoolBalance ? 
+                                `${(parseInt(platform.insurancePoolBalance) / 10000000).toFixed(2)}` : '0'
+                            }
+                        </div>
+                        <p className="text-xs text-muted-foreground">XLM in pool</p>
                     </CardContent>
                 </Card>
             </div>
 
+            {/* User-specific Stats */}
+            {userType === 'SUPPLIER' && userStats && (
+                <div className="grid gap-4 md:grid-cols-3">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">My Invoices</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{userStats.totalInvoicesCreated || 0}</div>
+                            <p className="text-xs text-muted-foreground">Total created</p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Amount Financed</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {((userStats.totalAmountFinanced || 0) / 10000000).toFixed(2)} XLM
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Total Received</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-emerald-500">
+                                {((userStats.totalReceived || 0) / 10000000).toFixed(2)} XLM
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {userType === 'INVESTOR' && userStats && (
+                <div className="grid gap-4 md:grid-cols-3">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Total Invested</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {((userStats.totalInvested || 0) / 10000000).toFixed(2)} XLM
+                            </div>
+                            <p className="text-xs text-muted-foreground">{userStats.investmentCount || 0} investments</p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Active Investments</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{userStats.activeInvestments || 0}</div>
+                            <p className="text-xs text-muted-foreground">
+                                {((userStats.activeInvestmentValue || 0) / 10000000).toFixed(2)} XLM value
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Total Returns</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-emerald-500">
+                                {((userStats.totalReturns || 0) / 10000000).toFixed(2)} XLM
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Quick Actions */}
             <div className="grid gap-4 md:grid-cols-3">
                 <Card className="bg-primary text-primary-foreground">
                     <CardHeader className="pb-2">
@@ -118,7 +218,39 @@ export default function DashboardPage() {
                 </Card>
             </div>
 
-            {totalInvoices === 0 && (
+            {/* Recent Activity */}
+            {stats?.recentActivity && stats.recentActivity.length > 0 && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Recent Activity</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            {stats.recentActivity.map((activity) => (
+                                <div key={activity.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                                    <div className="flex items-center gap-3">
+                                        <FileText className="h-4 w-4 text-muted-foreground" />
+                                        <div>
+                                            <p className="font-medium">{activity.invoiceId}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {new Date(activity.createdAt).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm font-medium">
+                                            {activity.amount ? `${(parseInt(activity.amount) / 10000000).toFixed(2)} XLM` : '-'}
+                                        </span>
+                                        <StatusBadge status={activity.status} size="sm" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {platform?.totalInvoices === 0 && (
                 <Card className="border-dashed">
                     <CardContent className="flex flex-col items-center justify-center py-12">
                         <FileText className="h-12 w-12 text-muted-foreground mb-4" />
