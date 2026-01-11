@@ -1,77 +1,100 @@
 "use client"
 
 import * as React from "react"
-import { useStore } from "@/lib/store"
+import { useAuth } from "@/hooks/useAuth"
+import { useInvoices } from "@/hooks/useInvoices"
 import { useFreighterWallet } from "@/hooks/useFreighterWallet"
-import { fundInvoiceBrowser } from "@/lib/contracts/browser-client"
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card"
+import { AuctionCard } from "@/components/invoice/auction-card"
+import { InvestModal } from "@/components/invoice/invest-modal"
+import { KYCGate } from "@/components/kyc/kyc-gate"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { InvoiceStatus } from "@/lib/contracts/config"
-import { TrendingUp, ShieldCheck, DollarSign, Loader2, AlertCircle, Wallet } from "lucide-react"
-
-// Smart Mock: Match smart contract base rate (10% = 1000 basis points)
-const PROTOCOL_APY = 10
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { TrendingUp, ShieldCheck, Loader2, AlertCircle, Wallet, Search } from "lucide-react"
 
 export default function MarketplacePage() {
-    const { invoices, updateInvoice, addNotification } = useStore()
+    const { isKycApproved } = useAuth()
     const { publicKey, isConnected, connect } = useFreighterWallet()
-    const [investing, setInvesting] = React.useState<string | null>(null)
-    const [error, setError] = React.useState<string | null>(null)
+    const { invoices, loading, error, refetch } = useInvoices({ status: 'FUNDING' })
+    
+    const [selectedInvoice, setSelectedInvoice] = React.useState<typeof invoices[0] | null>(null)
+    const [showInvestModal, setShowInvestModal] = React.useState(false)
+    const [searchTerm, setSearchTerm] = React.useState("")
+    const [sortBy, setSortBy] = React.useState("discount")
 
-    // Filter for Verified invoices (ready to be funded)
-    const marketInvoices = invoices.filter(
-        (inv) => inv.status === InvoiceStatus.Verified
-    )
+    // Filter and sort invoices
+    const filteredInvoices = React.useMemo(() => {
+        let result = [...invoices]
 
-    // Calculate estimated profit for an invoice
-    const calculateEstProfit = (amount: string): number => {
-        const amountNum = parseInt(amount) / 10000000 // Convert from stroops to XLM
-        return Math.round((amountNum * PROTOCOL_APY) / 100)
+        // Search filter
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase()
+            result = result.filter(inv => 
+                inv.invoiceId?.toLowerCase().includes(term) ||
+                inv.description?.toLowerCase().includes(term) ||
+                inv.buyerName?.toLowerCase().includes(term)
+            )
+        }
+
+        // Sort
+        result.sort((a, b) => {
+            switch (sortBy) {
+                case "discount":
+                    // Higher discount first
+                    const discountA = a.startPrice && a.minPrice 
+                        ? (parseInt(a.startPrice) - parseInt(a.minPrice)) / parseInt(a.startPrice)
+                        : 0
+                    const discountB = b.startPrice && b.minPrice 
+                        ? (parseInt(b.startPrice) - parseInt(b.minPrice)) / parseInt(b.startPrice)
+                        : 0
+                    return discountB - discountA
+                case "amount":
+                    return parseInt(b.amount) - parseInt(a.amount)
+                case "time":
+                    return (a.auctionEnd || 0) - (b.auctionEnd || 0)
+                default:
+                    return 0
+            }
+        })
+
+        return result
+    }, [invoices, searchTerm, sortBy])
+
+    const handleInvest = (invoice: typeof invoices[0]) => {
+        setSelectedInvoice(invoice)
+        setShowInvestModal(true)
     }
 
-    const handleInvest = async (id: string, tokenAmount: string) => {
-        setError(null)
+    const handleConfirmInvest = async (tokenAmount: string, paymentAmount: string) => {
+        if (!selectedInvoice) return
 
-        if (!isConnected || !publicKey) {
-            setError("Please connect your wallet first")
-            return
+        const res = await fetch(`/api/invoices/${selectedInvoice.id}/fund`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tokenAmount, paymentAmount }),
+        })
+
+        if (!res.ok) {
+            const data = await res.json()
+            throw new Error(data.error || 'Investment failed')
         }
 
-        setInvesting(id)
+        refetch()
+    }
 
-        try {
-            // Convert to bigint for contract
-            // For demo: investing the full token amount with equivalent payment
-            const tokenAmountBigInt = BigInt(tokenAmount)
-            // Payment amount could be calculated differently, for now use same as token amount
-            const paymentAmountBigInt = BigInt(tokenAmount)
-
-            // Call the real contract with all 4 parameters
-            await fundInvoiceBrowser(publicKey, id, tokenAmountBigInt, paymentAmountBigInt)
-
-            // Update local state
-            updateInvoice(id, {
-                status: InvoiceStatus.Funded,
-            })
-
-            addNotification({
-                type: 'success',
-                title: 'Investment Successful!',
-                message: `You have funded invoice ${id} on-chain`
-            })
-        } catch (err: unknown) {
-            console.error('Investment failed:', err)
-            const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
-            addNotification({
-                type: 'error',
-                title: 'Investment Failed',
-                message: errorMessage
-            })
-            setError(errorMessage)
-        } finally {
-            setInvesting(null)
-        }
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        )
     }
 
     return (
@@ -92,13 +115,14 @@ export default function MarketplacePage() {
                     <Card className="p-3 flex items-center gap-3 bg-secondary/50 border-none">
                         <TrendingUp className="h-5 w-5 text-blue-500" />
                         <div className="flex flex-col">
-                            <span className="text-xs text-muted-foreground">Protocol APY</span>
-                            <span className="font-bold text-sm">{PROTOCOL_APY}%</span>
+                            <span className="text-xs text-muted-foreground">Active Auctions</span>
+                            <span className="font-bold text-sm">{invoices.length}</span>
                         </div>
                     </Card>
                 </div>
             </div>
 
+            {/* Wallet Connection */}
             {!isConnected && (
                 <Card className="border-amber-500/50 bg-amber-500/10">
                     <CardContent className="flex items-center gap-4 p-4">
@@ -115,6 +139,13 @@ export default function MarketplacePage() {
                 </Card>
             )}
 
+            {/* KYC Gate */}
+            {isConnected && !isKycApproved && (
+                <KYCGate>
+                    <></>
+                </KYCGate>
+            )}
+
             {error && (
                 <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
@@ -122,74 +153,59 @@ export default function MarketplacePage() {
                 </div>
             )}
 
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search invoices..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                    />
+                </div>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="discount">Highest Discount</SelectItem>
+                        <SelectItem value="amount">Largest Amount</SelectItem>
+                        <SelectItem value="time">Ending Soon</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Auction Grid */}
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {marketInvoices.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-muted-foreground">
-                        No verified invoices available for funding right now.
+                {filteredInvoices.length === 0 ? (
+                    <div className="col-span-full py-12 text-center">
+                        <TrendingUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                        <h3 className="text-lg font-semibold mb-2">No Active Auctions</h3>
+                        <p className="text-muted-foreground">
+                            {searchTerm 
+                                ? "No invoices match your search criteria."
+                                : "No verified invoices available for funding right now."}
+                        </p>
                     </div>
                 ) : (
-                    marketInvoices.map((inv) => {
-                        const amountXLM = (parseInt(inv.amount) / 10000000).toLocaleString()
-                        const estProfit = calculateEstProfit(inv.amount)
-
-                        return (
-                            <Card key={inv.id} className="flex flex-col hover:border-primary/50 transition-colors">
-                                <CardHeader>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                                            Verified
-                                        </Badge>
-                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-                                            {PROTOCOL_APY}% APY
-                                        </Badge>
-                                    </div>
-                                    <CardTitle className="text-xl">
-                                        {amountXLM} <span className="text-sm font-normal text-muted-foreground">XLM</span>
-                                    </CardTitle>
-                                    <CardDescription className="line-clamp-2">
-                                        {inv.description}
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="flex-1">
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between text-sm border-b pb-2">
-                                            <span className="text-muted-foreground">Maturity Date</span>
-                                            <span className="font-medium">{new Date(inv.dueDate * 1000).toLocaleDateString()}</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm border-b pb-2">
-                                            <span className="text-muted-foreground">Est. Profit</span>
-                                            <span className="font-medium text-emerald-500">+{estProfit.toLocaleString()} XLM</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Buyer</span>
-                                            <span className="font-mono text-xs">{inv.buyer.substring(0, 8)}...</span>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                                <CardFooter className="pt-4">
-                                    <Button
-                                        className="w-full gap-2"
-                                        onClick={() => handleInvest(inv.id, inv.amount)}
-                                        disabled={!!investing || !isConnected}
-                                    >
-                                        {investing === inv.id ? (
-                                            <>
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                Signing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <DollarSign className="h-4 w-4" />
-                                                Fund Invoice (On-Chain)
-                                            </>
-                                        )}
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        )
-                    })
+                    filteredInvoices.map((invoice) => (
+                        <AuctionCard
+                            key={invoice.id}
+                            invoice={invoice}
+                            onInvest={() => handleInvest(invoice)}
+                        />
+                    ))
                 )}
             </div>
+
+            {/* Invest Modal */}
+            <InvestModal
+                open={showInvestModal}
+                onOpenChange={setShowInvestModal}
+                invoice={selectedInvoice}
+                onConfirm={handleConfirmInvest}
+            />
         </div>
     )
 }

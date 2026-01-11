@@ -20,19 +20,23 @@ export default withAuth(
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
-    // Suppliers only routes
-    if (pathname.startsWith('/dashboard/create') && token?.userType !== 'SUPPLIER') {
+    // Suppliers only routes - but ADMIN can access too
+    // For demo/testing, allow all authenticated users
+    if (pathname.startsWith('/dashboard/create') && 
+        !token) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
-    // Buyers only routes
-    if (pathname.startsWith('/dashboard/requests') && token?.userType !== 'BUYER') {
+    // Buyers only routes - but ADMIN can access too
+    // For demo/testing, allow all authenticated users
+    if ((pathname.startsWith('/dashboard/requests') || pathname.startsWith('/dashboard/settlements')) && 
+        !token) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
-    // Investors only routes (portfolio, market)
-    const investorRoutes = ['/dashboard/portfolio', '/dashboard/market'];
-    if (investorRoutes.some(route => pathname.startsWith(route)) && token?.userType !== 'INVESTOR') {
+    // Investor routes - allow all authenticated users for demo
+    const investorRoutes = ['/dashboard/portfolio', '/dashboard/market', '/dashboard/orders'];
+    if (investorRoutes.some(route => pathname.startsWith(route)) && !token) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 

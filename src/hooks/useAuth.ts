@@ -10,6 +10,9 @@ export function useAuth() {
   const isLoading = status === 'loading';
   const isAuthenticated = status === 'authenticated';
   const user = session?.user;
+  const userType = session?.user?.userType;
+  const walletAddress = session?.user?.walletAddress;
+  const kycStatus = session?.user?.kycStatus;
 
   const login = async (provider: 'credentials' | 'wallet', credentials?: {
     email?: string;
@@ -46,13 +49,26 @@ export function useAuth() {
     return isAuthenticated;
   };
 
+  const requireUserType = (allowedTypes: string[]) => {
+    if (!isAuthenticated) return false;
+    if (!userType) return false;
+    return allowedTypes.includes(userType);
+  };
+
+  const isKycApproved = kycStatus === 'APPROVED';
+
   return {
     user,
     session,
     isLoading,
     isAuthenticated,
+    userType,
+    walletAddress,
+    kycStatus,
+    isKycApproved,
     login,
     logout,
     requireAuth,
+    requireUserType,
   };
 }

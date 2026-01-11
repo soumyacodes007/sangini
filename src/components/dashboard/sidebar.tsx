@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { WalletConnect } from "./wallet-connect"
-import { useStore } from "@/lib/store"
+import { useAuth } from "@/hooks/useAuth"
 import {
     PieChart,
     PlusCircle,
@@ -13,22 +13,72 @@ import {
     Briefcase,
     ShieldCheck,
     Menu,
-    X
+    X,
+    User,
+    CreditCard,
+    LogOut
 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 
-const routes = [
-    { label: "Overview", icon: PieChart, href: "/dashboard" },
-    { label: "Mint Invoice", icon: PlusCircle, href: "/dashboard/create" },
-    { label: "Pending Requests", icon: FileText, href: "/dashboard/requests" },
-    { label: "Marketplace", icon: TrendingUp, href: "/dashboard/market" },
-    { label: "Portfolio", icon: Briefcase, href: "/dashboard/portfolio" },
-    { label: "Admin", icon: ShieldCheck, href: "/dashboard/admin" },
-]
+// Routes based on user type
+const getRoutes = (userType?: string) => {
+    const baseRoutes = [
+        { label: "Overview", icon: PieChart, href: "/dashboard" },
+    ]
+
+    const supplierRoutes = [
+        { label: "Mint Invoice", icon: PlusCircle, href: "/dashboard/create" },
+    ]
+
+    const buyerRoutes = [
+        { label: "Pending Requests", icon: FileText, href: "/dashboard/requests" },
+        { label: "Settlements", icon: CreditCard, href: "/dashboard/settlements" },
+    ]
+
+    const investorRoutes = [
+        { label: "Marketplace", icon: TrendingUp, href: "/dashboard/market" },
+        { label: "Portfolio", icon: Briefcase, href: "/dashboard/portfolio" },
+        { label: "My Orders", icon: FileText, href: "/dashboard/orders" },
+    ]
+
+    const profileRoute = [
+        { label: "Profile", icon: User, href: "/dashboard/profile" },
+    ]
+
+    const adminRoutes = [
+        { label: "Admin", icon: ShieldCheck, href: "/dashboard/admin" },
+    ]
+
+    let routes = [...baseRoutes]
+
+    // Add routes based on user type
+    if (userType === 'SUPPLIER') {
+        routes = [...routes, ...supplierRoutes, ...investorRoutes, ...profileRoute]
+    } else if (userType === 'BUYER') {
+        routes = [...routes, ...buyerRoutes, ...profileRoute]
+    } else if (userType === 'INVESTOR') {
+        routes = [...routes, ...investorRoutes, ...profileRoute]
+    } else if (userType === 'ADMIN') {
+        routes = [...routes, ...supplierRoutes, ...buyerRoutes, ...investorRoutes, ...adminRoutes, ...profileRoute]
+    } else {
+        // Show all routes if no user type (for demo/testing)
+        routes = [
+            ...baseRoutes,
+            ...supplierRoutes,
+            { label: "Pending Requests", icon: FileText, href: "/dashboard/requests" },
+            ...investorRoutes,
+            ...profileRoute,
+        ]
+    }
+
+    return routes
+}
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     const pathname = usePathname()
+    const { userType } = useAuth()
+    const routes = getRoutes(userType)
     
     return (
         <nav className="grid items-start px-4 text-sm font-medium gap-1">
@@ -55,23 +105,43 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     )
 }
 
-function WalletStatus() {
-    const { wallet } = useStore()
+function UserStatus() {
+    const { user, userType, walletAddress, isAuthenticated, logout } = useAuth()
+    
+    if (!isAuthenticated) {
+        return (
+            <div className="mb-4 p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 text-sm">
+                    <div className="h-2 w-2 rounded-full bg-red-500" />
+                    <span className="text-muted-foreground">Not signed in</span>
+                </div>
+            </div>
+        )
+    }
     
     return (
-        <div className="mb-4 p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2 text-sm">
-                <div className={cn(
-                    "h-2 w-2 rounded-full",
-                    wallet.isConnected ? "bg-emerald-500" : "bg-red-500"
-                )} />
-                <span className="text-muted-foreground">
-                    {wallet.isConnected ? "Connected" : "Not Connected"}
-                </span>
+        <div className="mb-4 p-3 rounded-lg bg-muted/50 space-y-2">
+            <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                        {user?.name || user?.email || 'User'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        {userType || 'Member'}
+                    </p>
+                </div>
             </div>
-            {wallet.address && (
-                <p className="mt-1 font-mono text-xs text-muted-foreground truncate">
-                    {wallet.address}
+            {walletAddress && (
+                <p className="font-mono text-xs text-muted-foreground truncate">
+                    {walletAddress.slice(0, 8)}...{walletAddress.slice(-4)}
+                </p>
+            )}
+            {user?.email && !walletAddress && (
+                <p className="text-xs text-muted-foreground truncate">
+                    {user.email}
                 </p>
             )}
         </div>
@@ -80,6 +150,7 @@ function WalletStatus() {
 
 export function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false)
+    const { logout, isAuthenticated } = useAuth()
 
     return (
         <>
@@ -115,13 +186,23 @@ export function Sidebar() {
                             </div>
                             <span className="text-xl font-bold tracking-tight">Sangini</span>
                         </div>
-                        <WalletStatus />
+                        <UserStatus />
                     </div>
                     <div className="flex-1 overflow-auto py-2">
                         <SidebarNav onNavigate={() => setMobileOpen(false)} />
                     </div>
                     <div className="p-4 border-t space-y-2">
                         <WalletConnect />
+                        {isAuthenticated && (
+                            <Button 
+                                variant="ghost" 
+                                className="w-full justify-start gap-2 text-muted-foreground"
+                                onClick={() => logout()}
+                            >
+                                <LogOut className="h-4 w-4" />
+                                Sign Out
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -135,13 +216,23 @@ export function Sidebar() {
                         </div>
                         <span className="text-xl font-bold tracking-tight">Sangini</span>
                     </div>
-                    <WalletStatus />
+                    <UserStatus />
                 </div>
                 <div className="flex-1 overflow-auto py-2">
                     <SidebarNav />
                 </div>
                 <div className="p-4 border-t space-y-2">
                     <WalletConnect />
+                    {isAuthenticated && (
+                        <Button 
+                            variant="ghost" 
+                            className="w-full justify-start gap-2 text-muted-foreground"
+                            onClick={() => logout()}
+                        >
+                            <LogOut className="h-4 w-4" />
+                            Sign Out
+                        </Button>
+                    )}
                 </div>
             </div>
         </>
