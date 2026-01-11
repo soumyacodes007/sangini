@@ -1000,14 +1000,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sangini-token"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
- "soroban-token-sdk",
-]
-
-[[package]]
 name = "schemars"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
