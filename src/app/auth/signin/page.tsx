@@ -5,6 +5,13 @@ import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFreighterWallet } from '@/hooks/useFreighterWallet';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Loader2, Wallet, Mail, Building2, TrendingUp, ShoppingCart, ArrowLeft } from 'lucide-react';
+
+type UserRole = 'SUPPLIER' | 'BUYER' | 'INVESTOR' | null;
 
 function SignInContent() {
   const router = useRouter();
@@ -12,6 +19,10 @@ function SignInContent() {
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
   const error = searchParams.get('error');
 
+  // Step state: 'role' -> 'login'
+  const [step, setStep] = useState<'role' | 'login'>('role');
+  const [selectedRole, setSelectedRole] = useState<UserRole>(null);
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +30,19 @@ function SignInContent() {
 
   const { isInstalled, connect, publicKey } = useFreighterWallet();
 
-  // Email/Password Sign In
+  const handleRoleSelect = (role: UserRole) => {
+    setSelectedRole(role);
+    setStep('login');
+    setAuthError(null);
+  };
+
+  const handleBack = () => {
+    setStep('role');
+    setSelectedRole(null);
+    setAuthError(null);
+  };
+
+  // Email/Password Sign In (for Buyers)
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -39,7 +62,7 @@ function SignInContent() {
     }
   };
 
-  // Wallet Sign In
+  // Wallet Sign In (for Suppliers/Investors)
   const handleWalletSignIn = async () => {
     setIsLoading(true);
     setAuthError(null);
@@ -54,8 +77,18 @@ function SignInContent() {
           setIsLoading(false);
           return;
         }
-        // Get the address after connecting
-        walletAddress = publicKey;
+        // Wait a bit for the wallet to be ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Get the address from Freighter directly
+        const { getAddress } = await import('@stellar/freighter-api');
+        const addressResult = await getAddress();
+        if (addressResult.error || !addressResult.address) {
+          setAuthError('Could not get wallet address');
+          setIsLoading(false);
+          return;
+        }
+        walletAddress = addressResult.address;
       }
 
       if (!walletAddress) {
@@ -64,11 +97,14 @@ function SignInContent() {
         return;
       }
 
-      // Get nonce from server
+      // Get nonce from server with the selected role
       const nonceRes = await fetch('/api/auth/wallet/nonce', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress }),
+        body: JSON.stringify({ 
+          walletAddress,
+          userType: selectedRole // Pass the selected role
+        }),
       });
 
       if (!nonceRes.ok) {
@@ -94,6 +130,7 @@ function SignInContent() {
         walletAddress,
         signature: signResult.signedMessage,
         nonce,
+        userType: selectedRole, // Pass the selected role
         redirect: false,
       });
 
@@ -109,13 +146,110 @@ function SignInContent() {
     setIsLoading(false);
   };
 
+  // Role Selection Step
+  if (step === 'role') {
+    return (
+      <div className="w-full max-w-lg space-y-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">Welcome to Sangini</h1>
+          <p className="mt-2 text-muted-foreground">
+            Select your role to continue
+          </p>
+        </div>
+
+        <div className="grid gap-4">
+          {/* Supplier Card */}
+          <Card 
+            className="cursor-pointer hover:border-primary transition-colors"
+            onClick={() => handleRoleSelect('SUPPLIER')}
+          >
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <Building2 className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Supplier</h3>
+                <p className="text-sm text-muted-foreground">
+                  Create and tokenize invoices for financing
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                Wallet Login
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Buyer Card */}
+          <Card 
+            className="cursor-pointer hover:border-emerald-500 transition-colors"
+            onClick={() => handleRoleSelect('BUYER')}
+          >
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <ShoppingCart className="h-6 w-6 text-emerald-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Buyer</h3>
+                <p className="text-sm text-muted-foreground">
+                  Approve invoices and settle payments
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                Email Login
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Investor Card */}
+          <Card 
+            className="cursor-pointer hover:border-blue-500 transition-colors"
+            onClick={() => handleRoleSelect('INVESTOR')}
+          >
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-blue-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Investor</h3>
+                <p className="text-sm text-muted-foreground">
+                  Invest in verified invoices and earn yield
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                Wallet Login
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{' '}
+          <Link href="/auth/register" className="text-primary hover:underline">
+            Register
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
+  // Login Step
   return (
     <div className="w-full max-w-md space-y-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold">Sign In to Sangini</h1>
-        <p className="mt-2 text-muted-foreground">
-          Invoice financing on Stellar
-        </p>
+      <div>
+        <Button variant="ghost" onClick={handleBack} className="mb-4">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">
+            Sign In as {selectedRole === 'SUPPLIER' ? 'Supplier' : selectedRole === 'BUYER' ? 'Buyer' : 'Investor'}
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            {selectedRole === 'BUYER' 
+              ? 'Sign in with your email and password'
+              : 'Connect your Freighter wallet to continue'}
+          </p>
+        </div>
       </div>
 
       {authError && (
@@ -124,91 +258,102 @@ function SignInContent() {
         </div>
       )}
 
-      {/* Wallet Sign In */}
-      <div className="space-y-4">
-        <button
-          onClick={handleWalletSignIn}
-          disabled={isLoading || !isInstalled}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-          </svg>
-          {isInstalled ? 'Sign in with Freighter Wallet' : 'Install Freighter Wallet'}
-        </button>
+      {/* Buyer - Email Login */}
+      {selectedRole === 'BUYER' && (
+        <form onSubmit={handleEmailSignIn} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@company.com"
+            />
+          </div>
 
-        {!isInstalled && (
-          <p className="text-sm text-center text-muted-foreground">
-            <a
-              href="https://www.freighter.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              Get Freighter →
-            </a>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+            />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : (
+              <>
+                <Mail className="mr-2 h-4 w-4" />
+                Sign in with Email
+              </>
+            )}
+          </Button>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{' '}
+            <Link href="/auth/register" className="text-primary hover:underline">
+              Register as Buyer
+            </Link>
           </p>
-        )}
-      </div>
+        </form>
+      )}
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
+      {/* Supplier/Investor - Wallet Login */}
+      {(selectedRole === 'SUPPLIER' || selectedRole === 'INVESTOR') && (
+        <div className="space-y-4">
+          <Button
+            onClick={handleWalletSignIn}
+            disabled={isLoading || !isInstalled}
+            className="w-full"
+            size="lg"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <Wallet className="mr-2 h-4 w-4" />
+                {isInstalled ? 'Connect Freighter Wallet' : 'Install Freighter Wallet'}
+              </>
+            )}
+          </Button>
+
+          {!isInstalled && (
+            <p className="text-sm text-center text-muted-foreground">
+              <a
+                href="https://www.freighter.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Get Freighter Wallet →
+              </a>
+            </p>
+          )}
+
+          <div className="p-4 rounded-lg bg-muted/50 text-sm">
+            <p className="font-medium mb-2">How it works:</p>
+            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+              <li>Click &quot;Connect Freighter Wallet&quot;</li>
+              <li>Approve the connection in Freighter</li>
+              <li>Sign the authentication message</li>
+              <li>You&apos;re logged in!</li>
+            </ol>
+          </div>
         </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-background text-muted-foreground">
-            Or continue with email
-          </span>
-        </div>
-      </div>
-
-      {/* Email Sign In */}
-      <form onSubmit={handleEmailSignIn} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium mb-2">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="you@company.com"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium mb-2">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="••••••••"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full px-4 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 disabled:opacity-50 transition-colors"
-        >
-          {isLoading ? 'Signing in...' : 'Sign in with Email'}
-        </button>
-      </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{' '}
-        <Link href="/auth/register" className="text-primary hover:underline">
-          Register
-        </Link>
-      </p>
+      )}
     </div>
   );
 }

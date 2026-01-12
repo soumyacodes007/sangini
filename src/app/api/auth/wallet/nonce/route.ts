@@ -5,7 +5,7 @@ import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
-    const { walletAddress } = await request.json();
+    const { walletAddress, userType } = await request.json();
 
     if (!walletAddress) {
       return NextResponse.json(
@@ -31,10 +31,11 @@ export async function POST(request: NextRequest) {
     // Delete any existing nonces for this wallet
     await db.collection('nonces').deleteMany({ walletAddress });
 
-    // Store new nonce
+    // Store new nonce with userType
     await db.collection('nonces').insertOne({
       walletAddress,
       nonce,
+      userType: userType || 'INVESTOR', // Default to INVESTOR if not specified
       expiresAt,
       createdAt: new Date(),
     });

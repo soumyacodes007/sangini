@@ -90,8 +90,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const keypair = Keypair.fromSecret(privateKey);
 
     // 8. Build the approve_invoice transaction
+    // Use onChainId (the actual contract invoice ID) if available, otherwise fall back
+    const contractInvoiceId = invoice.onChainId || invoice.invoiceId || invoiceId;
+    
+    console.log('Approving invoice with contract ID:', contractInvoiceId);
+    
     const txXdr = await buildInvoiceApprovalTx(
-      invoice.invoiceId || invoiceId,
+      contractInvoiceId,
       user.custodialPubKey
     );
 

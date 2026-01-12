@@ -30,6 +30,8 @@ interface InvestModalProps {
     startPrice?: string;
     minPrice?: string;
     priceDropRate?: number;
+    totalTokens?: string;
+    tokensSold?: string;
     tokensRemaining?: string;
   } | null;
   onConfirm: (tokenAmount: string, paymentAmount: string) => Promise<void>;
@@ -47,18 +49,32 @@ export function InvestModal({
 
   const { currentPrice, discount } = useAuctionPrice(invoice);
 
+  // Calculate available tokens - use tokensRemaining, or totalTokens, or fall back to amount
+  const invoiceAmount = invoice?.amount ? parseInt(invoice.amount) / 10000000 : 0;
+  const totalTokens = invoice?.totalTokens 
+    ? parseInt(invoice.totalTokens) / 10000000 
+    : invoiceAmount;
+  const tokensSold = invoice?.tokensSold 
+    ? parseInt(invoice.tokensSold) / 10000000 
+    : 0;
   const tokensAvailable = invoice?.tokensRemaining 
     ? parseInt(invoice.tokensRemaining) / 10000000 
-    : 0;
+    : (totalTokens - tokensSold) || invoiceAmount;
+  
   const tokenAmount = (tokensAvailable * percentage) / 100;
-  const totalCost = tokenAmount * (currentPrice / (parseInt(invoice?.amount || '0') / 10000000 || 1));
+  
+  // Calculate cost based on current auction price
+  // Current price is per unit of face value, so cost = tokens * (currentPrice / faceValue per token)
+  const priceRatio = invoiceAmount > 0 ? currentPrice / invoiceAmount : 1;
+  const totalCost = tokenAmount * priceRatio;
+  
   const faceValue = tokenAmount;
   const estimatedReturn = faceValue - totalCost;
   const returnPercentage = totalCost > 0 ? (estimatedReturn / totalCost) * 100 : 0;
 
   // Days until maturity
   const daysToMaturity = invoice 
-    ? Math.ceil((invoice.dueDate * 1000 - Date.now()) / (1000 * 60 * 60 * 24))
+    ? Math.max(0, Math.ceil((invoice.dueDate * 1000 - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
   const handleConfirm = async () => {
@@ -75,7 +91,16 @@ export function InvestModal({
       await onConfirm(tokenAmountStroops, paymentAmountStroops);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Investment failed');
+      const errorMessage = err instanceof Error ? err.message : 'Investment failed';
+      
+      // Provide more helpful error messages
+      if (errorMessage.includes('#7') || errorMessage.includes('KYC')) {
+        setError('On-chain KYC verification required. Please run: stellar contract invoke --id <CONTRACT> --source admin -- set_investor_kyc --admin <ADMIN> --investor <YOUR_WALLET> --approved true');
+      } else if (errorMessage.includes('Simulation failed')) {
+        setError(`Transaction simulation failed. ${errorMessage}`);
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

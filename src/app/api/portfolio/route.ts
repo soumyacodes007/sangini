@@ -19,10 +19,16 @@ export async function GET() {
       return NextResponse.json({ holdings: [] });
     }
 
-    // Get user's investments
+    // Get user's investments - check both wallet address formats
     const investments = await db.collection('investments').find({
-      investor: walletAddress,
+      $or: [
+        { investor: walletAddress },
+        { investorAddress: walletAddress },
+      ],
+      status: 'COMPLETED',
     }).toArray();
+    
+    console.log('Portfolio - Found investments for wallet:', walletAddress, 'Count:', investments.length);
 
     // Get invoice details for each investment
     const holdings = await Promise.all(

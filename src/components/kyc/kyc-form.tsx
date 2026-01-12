@@ -14,26 +14,37 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useFreighterWallet } from '@/hooks/useFreighterWallet';
 
 interface KYCFormProps {
   onSuccess?: () => void;
 }
 
 const COUNTRIES = [
-  'United States',
-  'United Kingdom',
-  'Canada',
-  'Germany',
-  'France',
-  'Australia',
-  'Singapore',
-  'Japan',
-  'Switzerland',
-  'Netherlands',
-  'Other',
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'IN', name: 'India' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'NO', name: 'Norway' },
+  { code: 'DK', name: 'Denmark' },
+  { code: 'FI', name: 'Finland' },
+  { code: 'IE', name: 'Ireland' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'AT', name: 'Austria' },
+  { code: 'BE', name: 'Belgium' },
+  { code: 'LU', name: 'Luxembourg' },
 ];
 
 export function KYCForm({ onSuccess }: KYCFormProps) {
+  const { publicKey } = useFreighterWallet();
   const [fullName, setFullName] = React.useState('');
   const [country, setCountry] = React.useState('');
   const [accreditedConfirm, setAccreditedConfirm] = React.useState(false);
@@ -52,18 +63,27 @@ export function KYCForm({ onSuccess }: KYCFormProps) {
     setError(null);
 
     try {
-      const res = await fetch('/api/kyc/simple', {
+      const res = await fetch('/api/kyc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fullName,
           country,
           accreditedInvestor: accreditedConfirm,
+          walletAddress: publicKey, // Pass wallet address for on-chain KYC
         }),
       });
 
+      const data = await res.json();
+
+      // If KYC is already approved, treat as success
+      if (data.kycStatus === 'APPROVED' || data.success) {
+        setSuccess(true);
+        onSuccess?.();
+        return;
+      }
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'KYC submission failed');
       }
 
@@ -83,9 +103,9 @@ export function KYCForm({ onSuccess }: KYCFormProps) {
           <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
             <CheckCircle2 className="h-8 w-8 text-emerald-500" />
           </div>
-          <h3 className="text-xl font-semibold mb-2">KYC Submitted</h3>
+          <h3 className="text-xl font-semibold mb-2">KYC Approved!</h3>
           <p className="text-muted-foreground text-center">
-            Your verification has been submitted and is being processed.
+            Your verification is complete. You can now invest in invoices.
           </p>
         </CardContent>
       </Card>
@@ -128,8 +148,8 @@ export function KYCForm({ onSuccess }: KYCFormProps) {
               </SelectTrigger>
               <SelectContent>
                 {COUNTRIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
