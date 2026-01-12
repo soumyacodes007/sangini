@@ -39,7 +39,8 @@ export interface DbUser {
 // Database Invoice document
 export interface DbInvoice {
   _id: ObjectId;
-  invoiceId: string;           // On-chain ID (e.g., "INV-1001")
+  invoiceId: string;           // DB-generated ID (e.g., "INV-1768245932193-1")
+  onChainId?: string;          // Actual contract invoice ID (e.g., "INV-1001")
   
   // Parties
   supplierId: ObjectId;
@@ -56,6 +57,7 @@ export interface DbInvoice {
   dueDate: Date;
   verifiedAt?: Date;
   settledAt?: Date;
+  mintedAt?: Date;             // When minted on-chain
   
   // Status
   status: InvoiceStatus;

@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getDb } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { DbInvoice, InvoiceResponse, CreateInvoiceRequest } from '@/lib/db/types';
+import { DbInvoice, CreateInvoiceRequest } from '@/lib/db/types';
 import { buildMintDraftTx } from '@/lib/stellar/transaction';
 
 // GET /api/invoices - List invoices with filters
@@ -27,9 +27,14 @@ export async function GET(request: NextRequest) {
     // Build query based on filters
     const query: Record<string, unknown> = {};
 
-    // Status filter
+    // Status filter - supports comma-separated values
     if (status) {
-      query.status = status.toUpperCase();
+      const statuses = status.split(',').map(s => s.trim().toUpperCase());
+      if (statuses.length === 1) {
+        query.status = statuses[0];
+      } else {
+        query.status = { $in: statuses };
+      }
     }
 
     // Role-based filter
@@ -40,11 +45,36 @@ export async function GET(request: NextRequest) {
         query.supplierId = new ObjectId(session.user.id);
       }
     } else if (role === 'buyer') {
+      // For buyers, check both their user ID and their custodial wallet address
+      const user = await db.collection('users').findOne({ _id: new ObjectId(session.user.id) });
+      const buyerConditions: Record<string, unknown>[] = [
+        { buyerId: new ObjectId(session.user.id) }
+      ];
+      
       if (session.user.walletAddress) {
-        query.buyerAddress = session.user.walletAddress;
-      } else {
-        query.buyerId = new ObjectId(session.user.id);
+        buyerConditions.push({ buyerAddress: session.user.walletAddress });
       }
+      if (user?.custodialPubKey) {
+        buyerConditions.push({ buyerAddress: user.custodialPubKey });
+      }
+      if (session.user.email) {
+        buyerConditions.push({ buyerEmail: session.user.email });
+      }
+      
+      // Combine with existing query using $and if status is set
+      if (query.status) {
+        query.$and = [
+          { status: query.status },
+          { $or: buyerConditions }
+        ];
+        delete query.status;
+      } else {
+        query.$or = buyerConditions;
+      }
+      
+      console.log('Buyer query conditions:', JSON.stringify(buyerConditions));
+      console.log('User custodialPubKey:', user?.custodialPubKey);
+      console.log('Session wallet:', session.user.walletAddress);
     } else if (role === 'investor') {
       // For investors, show all verified/funding/funded invoices
       query.status = { $in: ['VERIFIED', 'FUNDING', 'FUNDED'] };
@@ -76,51 +106,47 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map(users.map((u) => [u._id.toString(), u]));
 
-    // Transform to response format
-    const response: InvoiceResponse[] = invoices.map((inv) => {
+    // Transform to response format (flat structure for frontend)
+    const response = invoices.map((inv) => {
       const supplier = inv.supplierId ? userMap.get(inv.supplierId.toString()) : null;
       const buyer = inv.buyerId ? userMap.get(inv.buyerId.toString()) : null;
 
+      // Handle dueDate - could be Date object or timestamp
+      let dueDateValue: number;
+      if (inv.dueDate instanceof Date) {
+        dueDateValue = Math.floor(inv.dueDate.getTime() / 1000);
+      } else if (typeof inv.dueDate === 'number') {
+        dueDateValue = inv.dueDate;
+      } else {
+        dueDateValue = Math.floor(new Date(inv.dueDate).getTime() / 1000);
+      }
+
       return {
         id: inv._id.toString(),
-        invoiceId: inv.invoiceId,
-        supplier: {
-          id: inv.supplierId?.toString() || '',
-          name: supplier?.name || supplier?.companyName,
-          address: inv.supplierAddress,
-        },
-        buyer: {
-          id: inv.buyerId?.toString(),
-          name: buyer?.name || buyer?.companyName,
-          address: inv.buyerAddress,
-        },
+        invoiceId: inv.invoiceId || inv._id.toString(),
+        onChainId: inv.onChainId, // The actual contract invoice ID (e.g., INV-1001)
+        supplier: inv.supplierAddress || supplier?.walletAddress || '',
+        supplierName: supplier?.name || supplier?.companyName,
+        buyer: inv.buyerAddress || buyer?.walletAddress || buyer?.custodialPubKey || '',
+        buyerName: buyer?.name || buyer?.companyName,
         amount: inv.amount,
         currency: inv.currency,
         status: inv.status,
-        dueDate: inv.dueDate.toISOString(),
-        createdAt: inv.createdAt.toISOString(),
-        verifiedAt: inv.verifiedAt?.toISOString(),
-        settledAt: inv.settledAt?.toISOString(),
+        dueDate: dueDateValue,
+        createdAt: inv.createdAt instanceof Date ? inv.createdAt.toISOString() : inv.createdAt,
+        verifiedAt: inv.verifiedAt ? (inv.verifiedAt instanceof Date ? Math.floor(inv.verifiedAt.getTime() / 1000) : inv.verifiedAt) : undefined,
+        settledAt: inv.settledAt ? (inv.settledAt instanceof Date ? Math.floor(inv.settledAt.getTime() / 1000) : inv.settledAt) : undefined,
         description: inv.description,
         purchaseOrder: inv.purchaseOrder,
         documentHash: inv.documentHash,
-        auction: inv.auctionStart
-          ? {
-              isActive: inv.status === 'FUNDING',
-              startTime: inv.auctionStart?.toISOString(),
-              endTime: inv.auctionEnd?.toISOString(),
-              startPrice: inv.startPrice,
-              minPrice: inv.minPrice,
-            }
-          : undefined,
-        tokens: inv.totalTokens
-          ? {
-              symbol: inv.tokenSymbol,
-              total: inv.totalTokens,
-              sold: inv.tokensSold,
-              remaining: inv.tokensRemaining,
-            }
-          : undefined,
+        auctionStart: inv.auctionStart ? (inv.auctionStart instanceof Date ? Math.floor(inv.auctionStart.getTime() / 1000) : inv.auctionStart) : undefined,
+        auctionEnd: inv.auctionEnd ? (inv.auctionEnd instanceof Date ? Math.floor(inv.auctionEnd.getTime() / 1000) : inv.auctionEnd) : undefined,
+        startPrice: inv.startPrice,
+        minPrice: inv.minPrice,
+        priceDropRate: inv.priceDropRate,
+        totalTokens: inv.totalTokens,
+        tokensSold: inv.tokensSold,
+        tokensRemaining: inv.tokensRemaining,
       };
     });
 

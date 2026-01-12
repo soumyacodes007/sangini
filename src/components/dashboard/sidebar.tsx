@@ -29,6 +29,7 @@ const getRoutes = (userType?: string) => {
 
     const supplierRoutes = [
         { label: "Mint Invoice", icon: PlusCircle, href: "/dashboard/create" },
+        { label: "My Invoices", icon: FileText, href: "/dashboard/invoices" },
     ]
 
     const buyerRoutes = [

@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useStore } from "@/lib/store"
 import { useFreighterWallet } from "@/hooks/useFreighterWallet"
+import { useAuth } from "@/hooks/useAuth"
 import { mintDraftBrowser } from "@/lib/contracts/browser-client"
 import { InvoiceStatus } from "@/lib/contracts/config"
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
@@ -17,6 +18,7 @@ export default function CreateInvoicePage() {
     const router = useRouter()
     const { addInvoice, addNotification } = useStore()
     const { publicKey, isConnected, connect } = useFreighterWallet()
+    const { user } = useAuth()
     const [isLoading, setIsLoading] = React.useState(false)
     const [error, setError] = React.useState<string | null>(null)
 
@@ -48,6 +50,12 @@ export default function CreateInvoicePage() {
             return
         }
 
+        // Validate buyer address format
+        if (!buyerAddress.startsWith('G') || buyerAddress.length !== 56) {
+            setError("Invalid buyer wallet address. Must be a valid Stellar address starting with 'G'")
+            return
+        }
+
         setIsLoading(true)
 
         try {
@@ -55,6 +63,28 @@ export default function CreateInvoicePage() {
             const amountInStroops = BigInt(Math.floor(parseFloat(amount) * 10000000))
             const dueDateTimestamp = Math.floor(new Date(dueDate).getTime() / 1000)
             const purchaseOrder = `PO-${Date.now()}`
+
+            // First, save to database
+            const dbResponse = await fetch('/api/invoices/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    buyerAddress,
+                    amount: amountInStroops.toString(),
+                    currency: 'XLM',
+                    dueDate: new Date(dueDate).toISOString(),
+                    description,
+                    purchaseOrder,
+                    documentHash: documentCid || '',
+                    supplierAddress: publicKey,
+                }),
+            })
+
+            let dbInvoiceId = null
+            if (dbResponse.ok) {
+                const dbData = await dbResponse.json()
+                dbInvoiceId = dbData.invoiceId
+            }
 
             // Call the real contract
             const invoiceId = await mintDraftBrowser(
@@ -64,13 +94,26 @@ export default function CreateInvoicePage() {
                 'XLM',
                 dueDateTimestamp,
                 description,
-                purchaseOrder
+                purchaseOrder,
+                documentCid || ''
             )
 
+            // Update the database record with the on-chain invoice ID
+            if (dbInvoiceId) {
+                await fetch(`/api/invoices/${dbInvoiceId}/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        onChainId: invoiceId,
+                        status: 'DRAFT'
+                    }),
+                }).catch(err => console.warn('Failed to confirm invoice:', err))
+            }
+
             // If we have a document, update the invoice with the document hash
-            if (documentCid && invoiceId) {
+            if (documentCid && (dbInvoiceId || invoiceId)) {
                 try {
-                    await fetch(`/api/invoices/${invoiceId}/document`, {
+                    await fetch(`/api/invoices/${dbInvoiceId || invoiceId}/document`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ documentHash: documentCid }),
@@ -169,6 +212,7 @@ export default function CreateInvoicePage() {
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="e.g. Web Development Services"
+                                required
                             />
                         </div>
 
@@ -180,6 +224,8 @@ export default function CreateInvoicePage() {
                                     type="number"
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
+                                    required
+                                    min="1"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -189,19 +235,24 @@ export default function CreateInvoicePage() {
                                     type="date"
                                     value={dueDate}
                                     onChange={(e) => setDueDate(e.target.value)}
+                                    required
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="buyer">Buyer Address (Stellar Public Key)</Label>
+                            <Label htmlFor="buyer">Buyer Wallet Address</Label>
                             <Input
                                 id="buyer"
                                 value={buyerAddress}
                                 onChange={(e) => setBuyerAddress(e.target.value)}
                                 className="font-mono text-xs"
                                 placeholder="G..."
+                                required
                             />
+                            <p className="text-xs text-muted-foreground">
+                                Enter the buyer&apos;s Stellar wallet address (or their custodial wallet address)
+                            </p>
                         </div>
 
                         {/* Document Upload */}

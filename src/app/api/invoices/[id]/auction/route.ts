@@ -87,8 +87,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Build the start_auction transaction
+    // Use onChainId (the actual contract invoice ID) if available
+    const contractInvoiceId = invoice.onChainId || invoice.invoiceId;
+    
+    console.log('Starting auction for contract invoice ID:', contractInvoiceId);
+    
     const txXdr = await buildStartAuctionTx(
-      invoice.invoiceId,
+      contractInvoiceId,
       session.user.walletAddress,
       BigInt(durationHours),
       maxDiscountBps
@@ -149,6 +154,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const auctionEnd = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
     const startPrice = invoice.amount;
     const minPrice = (BigInt(invoice.amount) - (BigInt(invoice.amount) * BigInt(maxDiscountBps) / BigInt(10000))).toString();
+    
+    // Total tokens = invoice amount (1:1 tokenization)
+    const totalTokens = invoice.amount;
 
     // Update invoice
     await db.collection('invoices').updateOne(
@@ -161,6 +169,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           startPrice,
           minPrice,
           priceDropRate: 50, // Default 0.5% per hour
+          totalTokens: totalTokens,
+          tokensSold: '0',
+          tokensRemaining: totalTokens,
           auctionTxHash: txHash,
           updatedAt: new Date(),
         },
@@ -175,6 +186,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         endTime: auctionEnd.toISOString(),
         startPrice,
         minPrice,
+        totalTokens,
+        tokensRemaining: totalTokens,
       },
     });
   } catch (error) {

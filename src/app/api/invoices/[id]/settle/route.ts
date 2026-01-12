@@ -85,9 +85,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // 7. Get settlement amount from contract (includes interest/penalties)
+    // Use onChainId for contract calls
+    const contractInvoiceId = invoice.onChainId || invoice.invoiceId || invoiceId;
+    
     let paymentAmount: bigint;
     try {
-      paymentAmount = await getSettlementAmount(invoice.invoiceId || invoiceId);
+      paymentAmount = await getSettlementAmount(contractInvoiceId);
     } catch {
       // Fallback to invoice amount if contract call fails
       paymentAmount = BigInt(invoice.amount);
@@ -106,9 +109,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
     const keypair = Keypair.fromSecret(privateKey);
 
-    // 9. Build the settle transaction
+    // 9. Build the settle transaction using on-chain invoice ID
     const txXdr = await buildSettlementTx(
-      invoice.invoiceId || invoiceId,
+      contractInvoiceId,
       user.custodialPubKey,
       paymentAmount
     );
@@ -178,16 +181,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Get settlement amount from contract
+    // Get settlement amount from contract using on-chain ID
+    const contractInvoiceId = invoice.onChainId || invoice.invoiceId || invoiceId;
+    
     let settlementAmount: bigint;
     try {
-      settlementAmount = await getSettlementAmount(invoice.invoiceId || invoiceId);
+      settlementAmount = await getSettlementAmount(contractInvoiceId);
     } catch {
       settlementAmount = BigInt(invoice.amount);
     }
 
     return NextResponse.json({
       invoiceId: invoice.invoiceId || invoiceId,
+      onChainId: contractInvoiceId,
       originalAmount: invoice.amount,
       settlementAmount: settlementAmount.toString(),
       status: invoice.status,

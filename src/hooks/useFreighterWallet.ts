@@ -21,7 +21,7 @@ export function useFreighterWallet() {
     })
     const [isLoading, setIsLoading] = React.useState(true)
 
-    // Check if Freighter is installed on mount
+    // Check if Freighter is installed and already connected on mount
     React.useEffect(() => {
         const checkWallet = async () => {
             try {
@@ -38,6 +38,27 @@ export function useFreighterWallet() {
                         isInstalled: true,
                         error: null,
                     }))
+                    
+                    // Check if already connected and get address
+                    try {
+                        const addressResult = await freighterApi.getAddress()
+                        console.log("getAddress result:", addressResult)
+                        
+                        if (addressResult.address && !addressResult.error) {
+                            // Wallet is already connected
+                            const networkResult = await freighterApi.getNetworkDetails()
+                            setState({
+                                isInstalled: true,
+                                isConnected: true,
+                                publicKey: addressResult.address,
+                                network: networkResult.network || "TESTNET",
+                                error: null,
+                            })
+                        }
+                    } catch (addrErr) {
+                        // Not connected yet, that's fine
+                        console.log("Wallet not connected yet:", addrErr)
+                    }
                 } else {
                     setState(prev => ({
                         ...prev,

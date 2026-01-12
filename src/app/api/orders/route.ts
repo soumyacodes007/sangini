@@ -125,7 +125,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { invoiceId, tokenAmount, pricePerToken } = body;
+    const { invoiceId, tokenAmount, pricePerToken, sellerAddress } = body;
+
+    // Use provided seller address or fall back to session wallet
+    const walletAddress = sellerAddress || session.user.walletAddress;
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: 'Wallet not connected. Please connect your wallet.' },
+        { status: 400 }
+      );
+    }
 
     // Validation
     if (!invoiceId || !tokenAmount || !pricePerToken) {
@@ -145,10 +154,25 @@ export async function POST(request: NextRequest) {
     const db = await getDb();
 
     // Verify invoice exists and is in valid state
-    const invoice = await db.collection('invoices').findOne({ invoiceId });
+    // Support both MongoDB _id and invoiceId string
+    let invoice;
+    if (ObjectId.isValid(invoiceId)) {
+      invoice = await db.collection('invoices').findOne({
+        $or: [
+          { _id: new ObjectId(invoiceId) },
+          { invoiceId: invoiceId },
+        ]
+      });
+    } else {
+      invoice = await db.collection('invoices').findOne({ invoiceId });
+    }
+    
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
+
+    // Use the on-chain invoice ID for contract calls
+    const contractInvoiceId = invoice.onChainId || invoice.invoiceId;
 
     if (!['VERIFIED', 'FUNDING', 'FUNDED'].includes(invoice.status)) {
       return NextResponse.json(
@@ -158,32 +182,76 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has enough tokens (from investments or as supplier)
-    const userHolding = await db.collection('investments').findOne({
-      invoiceId,
-      investorAddress: session.user.walletAddress,
-    });
+    console.log('Looking for investments with wallet:', walletAddress);
+    console.log('Invoice ID:', invoice._id.toString());
+    console.log('Contract Invoice ID:', contractInvoiceId);
+    
+    const userInvestments = await db.collection('investments').find({
+      $or: [
+        { invoiceId: invoice._id.toString() },
+        { onChainInvoiceId: contractInvoiceId },
+      ],
+      investor: walletAddress,
+      status: 'COMPLETED',
+    }).toArray();
+    
+    console.log('Found investments:', userInvestments.length, userInvestments);
 
-    const isSupplier = invoice.supplierAddress === session.user.walletAddress;
+    const isSupplier = invoice.supplierAddress === walletAddress;
     
     let availableTokens = BigInt(0);
+    
     if (isSupplier) {
-      // Supplier has remaining tokens
-      availableTokens = BigInt(invoice.tokensRemaining || invoice.totalTokens || invoice.amount);
-    } else if (userHolding) {
-      availableTokens = BigInt(userHolding.tokenAmount);
+      // Supplier has remaining tokens (tokens not yet sold to investors)
+      const totalTokens = BigInt(invoice.totalTokens || invoice.amount || '0');
+      const tokensSold = BigInt(invoice.tokensSold || '0');
+      availableTokens = totalTokens - tokensSold;
+      console.log('Supplier tokens - total:', totalTokens.toString(), 'sold:', tokensSold.toString());
+    }
+    
+    // Add tokens from investments
+    for (const investment of userInvestments) {
+      const investmentTokens = BigInt(investment.tokenAmount || '0');
+      availableTokens += investmentTokens;
+      console.log('Adding investment tokens:', investmentTokens.toString());
     }
 
-    if (BigInt(tokenAmount) > availableTokens) {
+    // Subtract any tokens already listed in open sell orders
+    const existingOrders = await db.collection('sellOrders').find({
+      $or: [
+        { invoiceId: contractInvoiceId },
+        { invoiceId: invoice._id.toString() },
+      ],
+      sellerAddress: walletAddress,
+      status: { $in: ['OPEN', 'PARTIALLY_FILLED'] },
+    }).toArray();
+
+    for (const order of existingOrders) {
+      const orderTokens = BigInt(order.tokensRemaining || order.tokenAmount || '0');
+      availableTokens -= orderTokens;
+      console.log('Subtracting order tokens:', orderTokens.toString());
+    }
+
+    console.log('Final available tokens:', availableTokens.toString());
+
+    if (availableTokens <= BigInt(0)) {
       return NextResponse.json(
-        { error: `Insufficient tokens. Available: ${availableTokens.toString()}` },
+        { error: `No tokens available to sell. You may not have invested in this invoice or all tokens are already listed.` },
         { status: 400 }
       );
     }
 
-    // Build create_sell_order transaction
+    if (BigInt(tokenAmount) > availableTokens) {
+      return NextResponse.json(
+        { error: `Insufficient tokens. Available: ${(Number(availableTokens) / 10000000).toFixed(2)} tokens` },
+        { status: 400 }
+      );
+    }
+
+    // Build create_sell_order transaction using on-chain invoice ID
     const txXdr = await buildCreateSellOrderTx(
-      invoiceId,
-      session.user.walletAddress,
+      contractInvoiceId,
+      walletAddress,
       BigInt(tokenAmount),
       BigInt(pricePerToken)
     );
@@ -195,7 +263,8 @@ export async function POST(request: NextRequest) {
       success: true,
       xdr: txXdr,
       order: {
-        invoiceId,
+        invoiceId: contractInvoiceId,
+        invoiceDbId: invoice._id.toString(),
         tokenAmount,
         pricePerToken,
         totalValue: totalValue.toString(),

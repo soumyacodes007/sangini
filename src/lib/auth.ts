@@ -17,7 +17,7 @@ declare module 'next-auth' {
       name?: string | null;
       userType: UserType;
       walletAddress?: string | null;
-      kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+      kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
     };
   }
 
@@ -27,7 +27,7 @@ declare module 'next-auth' {
     name?: string | null;
     userType: UserType;
     walletAddress?: string | null;
-    kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+    kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   }
 }
 
@@ -36,7 +36,7 @@ declare module 'next-auth/jwt' {
     id: string;
     userType: UserType;
     walletAddress?: string | null;
-    kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+    kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   }
 }
 
@@ -91,6 +91,7 @@ export const authOptions: NextAuthOptions = {
         walletAddress: { label: 'Wallet Address', type: 'text' },
         signature: { label: 'Signature', type: 'text' },
         nonce: { label: 'Nonce', type: 'text' },
+        userType: { label: 'User Type', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.walletAddress || !credentials?.signature || !credentials?.nonce) {
@@ -110,6 +111,9 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid or expired nonce');
         }
 
+        // Get the userType from the nonce document or credentials
+        const userType = credentials.userType || nonceDoc.userType || 'INVESTOR';
+
         // TODO: Verify Stellar signature
         // For now, we trust the signature (implement proper verification)
         // const isValidSignature = verifySignature(credentials.walletAddress, credentials.nonce, credentials.signature);
@@ -123,11 +127,11 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user) {
-          // Create new user for wallet
+          // Create new user for wallet with the selected userType
           const result = await db.collection('users').insertOne({
             walletAddress: credentials.walletAddress,
-            userType: 'INVESTOR', // Default type for wallet users
-            kycStatus: 'PENDING',
+            userType: userType,
+            kycStatus: null, // Not submitted yet
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -135,9 +139,18 @@ export const authOptions: NextAuthOptions = {
           user = {
             _id: result.insertedId,
             walletAddress: credentials.walletAddress,
-            userType: 'INVESTOR',
-            kycStatus: 'PENDING',
+            userType: userType,
+            kycStatus: null,
           };
+        } else {
+          // Update userType if different (user might be logging in with different role)
+          if (user.userType !== userType) {
+            await db.collection('users').updateOne(
+              { _id: user._id },
+              { $set: { userType: userType, updatedAt: new Date() } }
+            );
+            user.userType = userType;
+          }
         }
 
         return {
@@ -158,13 +171,30 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.userType = user.userType;
         token.walletAddress = user.walletAddress;
         token.kycStatus = user.kycStatus;
       }
+      
+      // Refresh KYC status from database on each request
+      // This ensures KYC approval is reflected immediately
+      if (token.id) {
+        try {
+          const db = await getDb();
+          const dbUser = await db.collection('users').findOne({ 
+            _id: new ObjectId(token.id) 
+          });
+          if (dbUser) {
+            token.kycStatus = dbUser.kycStatus || null;
+          }
+        } catch (error) {
+          console.error('Failed to refresh KYC status:', error);
+        }
+      }
+      
       return token;
     },
 

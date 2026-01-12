@@ -95,7 +95,8 @@ export async function mintDraftBrowser(
     currency: string,
     dueDate: number,
     description: string,
-    purchaseOrder: string
+    purchaseOrder: string,
+    documentHash: string = ''
 ): Promise<string> {
     const op = invoiceContract.call(
         'mint_draft',
@@ -105,7 +106,8 @@ export async function mintDraftBrowser(
         nativeToScVal(currency, { type: 'string' }),
         nativeToScVal(dueDate, { type: 'u64' }),
         nativeToScVal(description, { type: 'string' }),
-        nativeToScVal(purchaseOrder, { type: 'string' })
+        nativeToScVal(purchaseOrder, { type: 'string' }),
+        nativeToScVal(documentHash, { type: 'string' })
     );
 
     const result = await submitWithFreighter(supplierPublicKey, op);

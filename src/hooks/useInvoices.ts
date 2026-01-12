@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 export interface Invoice {
   id: string;
   invoiceId: string;
+  onChainId?: string;  // The actual contract invoice ID (e.g., INV-1001)
   supplier: string;
   supplierName?: string;
   buyer: string;

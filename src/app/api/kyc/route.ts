@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { fullName, country, accreditedInvestor, documentType, documentNumber } = body;
+    const { fullName, country, accreditedInvestor, documentType, documentNumber, walletAddress } = body;
 
     // Validate required fields
     if (!fullName || !country) {
@@ -45,13 +45,17 @@ export async function POST(request: NextRequest) {
     const db = await getDb();
     const userId = new ObjectId(session.user.id);
 
+    // Use provided wallet address or fall back to session wallet
+    const effectiveWalletAddress = walletAddress || session.user.walletAddress;
+
     // Check if user already has approved KYC
     const user = await db.collection('users').findOne({ _id: userId });
     if (user?.kycStatus === 'APPROVED') {
-      return NextResponse.json(
-        { error: 'KYC already approved', kycStatus: 'APPROVED' },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: true,
+        kycStatus: 'APPROVED',
+        message: 'KYC already approved',
+      });
     }
 
     // Create KYC record
@@ -86,7 +90,14 @@ export async function POST(request: NextRequest) {
     // Update user's KYC status to pending
     await db.collection('users').updateOne(
       { _id: userId },
-      { $set: { kycStatus: 'PENDING', kycSubmittedAt: new Date() } }
+      { 
+        $set: { 
+          kycStatus: 'PENDING', 
+          kycSubmittedAt: new Date(),
+          // Update wallet address if provided and not already set
+          ...(effectiveWalletAddress && !user?.walletAddress ? { walletAddress: effectiveWalletAddress } : {}),
+        } 
+      }
     );
 
     // For demo purposes, auto-approve KYC
@@ -94,7 +105,7 @@ export async function POST(request: NextRequest) {
     const autoApprove = process.env.KYC_AUTO_APPROVE === 'true';
     
     if (autoApprove) {
-      await approveKyc(db, userId, session.user.walletAddress || undefined);
+      await approveKyc(db, userId, effectiveWalletAddress);
       
       return NextResponse.json({
         success: true,

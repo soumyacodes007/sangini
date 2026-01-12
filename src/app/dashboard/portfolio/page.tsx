@@ -64,8 +64,9 @@ export default function PortfolioPage() {
   };
 
   const handleCreateOrder = async (tokenAmount: string, pricePerToken: string) => {
-    if (!selectedInvoice) return;
+    if (!selectedInvoice || !walletAddress) return;
 
+    // Step 1: Get XDR from API
     const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,12 +74,64 @@ export default function PortfolioPage() {
         invoiceId: selectedInvoice.id,
         tokenAmount,
         pricePerToken,
+        sellerAddress: walletAddress,
       }),
     });
 
     if (!res.ok) {
       const data = await res.json();
       throw new Error(data.error || 'Failed to create order');
+    }
+
+    const { xdr, order } = await res.json();
+
+    // Step 2: Sign with Freighter
+    const { signTransaction } = await import('@stellar/freighter-api');
+    const StellarSdk = await import('@stellar/stellar-sdk');
+    
+    const signResult = await signTransaction(xdr, {
+      networkPassphrase: StellarSdk.Networks.TESTNET,
+    });
+
+    if (signResult.error) {
+      throw new Error(signResult.error);
+    }
+
+    const signedXdr = signResult.signedTxXdr;
+    const signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXdr, StellarSdk.Networks.TESTNET);
+
+    // Step 3: Submit to network
+    const server = new StellarSdk.rpc.Server('https://soroban-testnet.stellar.org');
+    const response = await server.sendTransaction(signedTx as StellarSdk.Transaction);
+
+    if (response.status === 'PENDING') {
+      let txResponse = await server.getTransaction(response.hash);
+      while (txResponse.status === 'NOT_FOUND') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        txResponse = await server.getTransaction(response.hash);
+      }
+      if (txResponse.status !== 'SUCCESS') {
+        throw new Error('Transaction failed on-chain');
+      }
+      
+      // Extract order ID from transaction result if available
+      // For now, generate a placeholder - the contract returns the order ID
+      const orderId = `ORD-${Date.now()}`;
+      
+      // Step 4: Confirm order in database
+      await fetch('/api/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          txHash: response.hash,
+          orderId,
+          invoiceId: order.invoiceId,
+          tokenAmount,
+          pricePerToken,
+        }),
+      });
+    } else if (response.status === 'ERROR') {
+      throw new Error(`Transaction error: ${response.errorResult}`);
     }
 
     fetchHoldings();
