@@ -159,8 +159,8 @@ export async function GET(request: NextRequest) {
 
     // Get order transactions
     if (!type || type === 'all' || type === 'orders') {
-      // Sell orders created
-      const sellOrders = await db.collection('orders')
+      // Sell orders created - ISSUE-1 FIX: Use correct collection name
+      const sellOrders = await db.collection('sellOrders')
         .find({ sellerId: userId })
         .sort({ createdAt: -1 })
         .limit(limit)
@@ -184,8 +184,8 @@ export async function GET(request: NextRequest) {
         });
       });
 
-      // Orders filled (as buyer)
-      const filledOrders = await db.collection('order_fills')
+      // Orders filled (as buyer) - ISSUE-4 FIX: Use correct collection name
+      const filledOrders = await db.collection('orderFills')
         .find({ buyerId: userId })
         .sort({ createdAt: -1 })
         .limit(limit)

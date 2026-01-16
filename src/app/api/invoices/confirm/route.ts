@@ -53,13 +53,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Update invoice with on-chain data
+    // FIX: Set BOTH invoiceId AND onChainId for consistency across all queries
     await db.collection('invoices').updateOne(
       { _id: new ObjectId(pendingId) },
       {
         $set: {
-          invoiceId,
+          invoiceId,          // Keep for backwards compatibility
+          onChainId: invoiceId, // FIX: Also set onChainId for new queries
           status: 'DRAFT',
           createTxHash: txHash,
+          mintedAt: new Date(),
           updatedAt: new Date(),
         },
       }

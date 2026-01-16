@@ -22,15 +22,15 @@ export default withAuth(
 
     // Suppliers only routes - but ADMIN can access too
     // For demo/testing, allow all authenticated users
-    if (pathname.startsWith('/dashboard/create') && 
-        !token) {
+    if (pathname.startsWith('/dashboard/create') &&
+      !token) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
     // Buyers only routes - but ADMIN can access too
     // For demo/testing, allow all authenticated users
-    if ((pathname.startsWith('/dashboard/requests') || pathname.startsWith('/dashboard/settlements')) && 
-        !token) {
+    if ((pathname.startsWith('/dashboard/requests') || pathname.startsWith('/dashboard/settlements')) &&
+      !token) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
@@ -86,5 +86,10 @@ export const config = {
     '/api/kyc/:path*',
     '/api/upload/:path*',
     '/api/stats/:path*',
+    // FIX: Add missing protected routes
+    '/api/portfolio/:path*',
+    '/api/transactions/:path*',
+    '/api/supplier/:path*',
+    '/api/buyers/:path*',
   ],
 };
