@@ -53,24 +53,24 @@ const getRoutes = (userType?: string) => {
 
     let routes = [...baseRoutes]
 
-    // Add routes based on user type
-    if (userType === 'SUPPLIER') {
-        routes = [...routes, ...supplierRoutes, ...investorRoutes, ...profileRoute]
-    } else if (userType === 'BUYER') {
-        routes = [...routes, ...buyerRoutes, ...profileRoute]
-    } else if (userType === 'INVESTOR') {
-        routes = [...routes, ...investorRoutes, ...profileRoute]
-    } else if (userType === 'ADMIN') {
-        routes = [...routes, ...supplierRoutes, ...buyerRoutes, ...investorRoutes, ...adminRoutes, ...profileRoute]
-    } else {
-        // Show all routes if no user type (for demo/testing)
-        routes = [
-            ...baseRoutes,
-            ...supplierRoutes,
-            { label: "Pending Requests", icon: FileText, href: "/dashboard/requests" },
-            ...investorRoutes,
-            ...profileRoute,
-        ]
+    // Add routes based on user type - STRICT role separation
+    switch (userType) {
+        case 'SUPPLIER':
+            routes = [...routes, ...supplierRoutes, ...profileRoute]
+            break
+        case 'BUYER':
+            routes = [...routes, ...buyerRoutes, ...profileRoute]
+            break
+        case 'INVESTOR':
+            routes = [...routes, ...investorRoutes, ...profileRoute]
+            break
+        case 'ADMIN':
+            routes = [...routes, ...supplierRoutes, ...buyerRoutes, ...investorRoutes, ...adminRoutes, ...profileRoute]
+            break
+        default:
+            // If not logged in or userType unknown, only show base + profile
+            routes = [...routes, ...profileRoute]
+            break
     }
 
     return routes
@@ -80,7 +80,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     const pathname = usePathname()
     const { userType } = useAuth()
     const routes = getRoutes(userType)
-    
+
     return (
         <nav className="grid items-start px-4 text-sm font-medium gap-1">
             {routes.map((route) => {
@@ -108,7 +108,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
 function UserStatus() {
     const { user, userType, walletAddress, isAuthenticated, logout } = useAuth()
-    
+
     if (!isAuthenticated) {
         return (
             <div className="mb-4 p-3 rounded-lg bg-muted/50">
@@ -119,7 +119,7 @@ function UserStatus() {
             </div>
         )
     }
-    
+
     return (
         <div className="mb-4 p-3 rounded-lg bg-muted/50 space-y-2">
             <div className="flex items-center gap-2">
@@ -168,7 +168,7 @@ export function Sidebar() {
 
             {/* Mobile Sidebar Overlay */}
             {mobileOpen && (
-                <div 
+                <div
                     className="md:hidden fixed inset-0 bg-black/50 z-40"
                     onClick={() => setMobileOpen(false)}
                 />
@@ -195,8 +195,8 @@ export function Sidebar() {
                     <div className="p-4 border-t space-y-2">
                         <WalletConnect />
                         {isAuthenticated && (
-                            <Button 
-                                variant="ghost" 
+                            <Button
+                                variant="ghost"
                                 className="w-full justify-start gap-2 text-muted-foreground"
                                 onClick={() => logout()}
                             >
@@ -225,8 +225,8 @@ export function Sidebar() {
                 <div className="p-4 border-t space-y-2">
                     <WalletConnect />
                     {isAuthenticated && (
-                        <Button 
-                            variant="ghost" 
+                        <Button
+                            variant="ghost"
                             className="w-full justify-start gap-2 text-muted-foreground"
                             onClick={() => logout()}
                         >

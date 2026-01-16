@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
     } else {
       invoice = await db.collection('invoices').findOne({ invoiceId });
     }
-    
+
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
@@ -185,22 +185,40 @@ export async function POST(request: NextRequest) {
     console.log('Looking for investments with wallet:', walletAddress);
     console.log('Invoice ID:', invoice._id.toString());
     console.log('Contract Invoice ID:', contractInvoiceId);
-    
+
+    // ISSUE-3 FIX: Search by both investor and investorAddress, handle missing status
     const userInvestments = await db.collection('investments').find({
-      $or: [
-        { invoiceId: invoice._id.toString() },
-        { onChainInvoiceId: contractInvoiceId },
+      $and: [
+        // Match invoice by multiple IDs
+        {
+          $or: [
+            { invoiceId: invoice._id.toString() },
+            { onChainInvoiceId: contractInvoiceId },
+          ],
+        },
+        // Match investor by multiple fields
+        {
+          $or: [
+            { investor: walletAddress },
+            { investorAddress: walletAddress },
+          ],
+        },
+        // Match status (or records without status for legacy)
+        {
+          $or: [
+            { status: 'COMPLETED' },
+            { status: { $exists: false } },
+          ],
+        },
       ],
-      investor: walletAddress,
-      status: 'COMPLETED',
     }).toArray();
-    
+
     console.log('Found investments:', userInvestments.length, userInvestments);
 
     const isSupplier = invoice.supplierAddress === walletAddress;
-    
+
     let availableTokens = BigInt(0);
-    
+
     if (isSupplier) {
       // Supplier has remaining tokens (tokens not yet sold to investors)
       const totalTokens = BigInt(invoice.totalTokens || invoice.amount || '0');
@@ -208,7 +226,7 @@ export async function POST(request: NextRequest) {
       availableTokens = totalTokens - tokensSold;
       console.log('Supplier tokens - total:', totalTokens.toString(), 'sold:', tokensSold.toString());
     }
-    
+
     // Add tokens from investments
     for (const investment of userInvestments) {
       const investmentTokens = BigInt(investment.tokenAmount || '0');

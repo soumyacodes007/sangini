@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -35,14 +35,22 @@ export async function POST(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Check if user is the buyer
+    // Check if user is the buyer - ISSUE-2 FIX: Strengthen authorization
+    // Must be the SPECIFIC buyer for THIS invoice, not just any buyer
     const userWallet = session.user.walletAddress;
     const userEmail = session.user.email;
-    
-    // For buyers, check if they're associated with this invoice
-    const isBuyer = invoice.buyer === userWallet || 
-                   invoice.buyerEmail === userEmail ||
-                   session.user.userType === 'BUYER';
+    const userId = session.user.id;
+
+    // Get user's custodialPubKey for comparison
+    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+
+    // Check SPECIFIC buyer match - not just any buyer
+    const isBuyer =
+      (invoice.buyerId && invoice.buyerId.toString() === userId) ||
+      (invoice.buyerAddress && invoice.buyerAddress === userWallet) ||
+      (invoice.buyerAddress && user?.custodialPubKey && invoice.buyerAddress === user.custodialPubKey) ||
+      (invoice.buyerEmail && invoice.buyerEmail === userEmail) ||
+      (invoice.buyer && invoice.buyer === userWallet);
 
     if (!isBuyer && session.user.userType !== 'ADMIN') {
       return NextResponse.json(

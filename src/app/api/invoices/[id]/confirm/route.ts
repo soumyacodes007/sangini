@@ -56,10 +56,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Update the invoice with the on-chain ID
+    // FIX: Set BOTH invoiceId AND onChainId for consistency
     await db.collection('invoices').updateOne(
       { _id: invoice._id },
       {
         $set: {
+          invoiceId: onChainId,   // FIX: Also set invoiceId for backwards compatibility
           onChainId: onChainId,
           status: status || invoice.status,
           mintedAt: new Date(),

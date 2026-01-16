@@ -1,5 +1,6 @@
 // Global State Management with Zustand
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { Invoice } from './contracts/config';
 
 interface WalletState {
@@ -44,85 +45,99 @@ interface AppState {
     removeNotification: (id: string) => void;
 }
 
-export const useStore = create<AppState>((set, get) => ({
-    // Wallet State
-    wallet: {
-        isConnected: false,
-        address: null,
-    },
-
-    connectWallet: (address: string) => {
-        set({
-            wallet: {
-                isConnected: true,
-                address,
-            },
-        });
-        get().addNotification({
-            type: 'success',
-            title: 'Wallet Connected',
-            message: `Connected: ${address.slice(0, 8)}...${address.slice(-4)}`,
-        });
-    },
-
-    disconnectWallet: () => {
-        set({
+// FIX: Add persist middleware to save wallet state to localStorage
+export const useStore = create<AppState>()(
+    persist(
+        (set, get) => ({
+            // Wallet State
             wallet: {
                 isConnected: false,
                 address: null,
             },
-        });
-    },
 
-    // Invoices - start empty, will be fetched from API/chain
-    invoices: [],
-    selectedInvoice: null,
+            connectWallet: (address: string) => {
+                set({
+                    wallet: {
+                        isConnected: true,
+                        address,
+                    },
+                });
+                get().addNotification({
+                    type: 'success',
+                    title: 'Wallet Connected',
+                    message: `Connected: ${address.slice(0, 8)}...${address.slice(-4)}`,
+                });
+            },
 
-    setSelectedInvoice: (invoice) => set({ selectedInvoice: invoice }),
+            disconnectWallet: () => {
+                set({
+                    wallet: {
+                        isConnected: false,
+                        address: null,
+                    },
+                });
+            },
 
-    addInvoice: (invoice) => {
-        set((state) => ({
-            invoices: [...state.invoices, invoice],
-        }));
-    },
+            // Invoices - start empty, will be fetched from API/chain
+            invoices: [],
+            selectedInvoice: null,
 
-    updateInvoice: (invoiceId, updates) => {
-        set((state) => ({
-            invoices: state.invoices.map((inv) =>
-                inv.id === invoiceId ? { ...inv, ...updates } : inv
-            ),
-        }));
-    },
+            setSelectedInvoice: (invoice) => set({ selectedInvoice: invoice }),
 
-    setInvoices: (invoices) => set({ invoices }),
+            addInvoice: (invoice) => {
+                set((state) => ({
+                    invoices: [...state.invoices, invoice],
+                }));
+            },
 
-    // UI State
-    isLoading: false,
-    setLoading: (loading) => set({ isLoading: loading }),
+            updateInvoice: (invoiceId, updates) => {
+                set((state) => ({
+                    invoices: state.invoices.map((inv) =>
+                        inv.id === invoiceId ? { ...inv, ...updates } : inv
+                    ),
+                }));
+            },
 
-    // Modals
-    activeModal: null,
-    openModal: (modalId) => set({ activeModal: modalId }),
-    closeModal: () => set({ activeModal: null }),
+            setInvoices: (invoices) => set({ invoices }),
 
-    // Notifications
-    notifications: [],
+            // UI State
+            isLoading: false,
+            setLoading: (loading) => set({ isLoading: loading }),
 
-    addNotification: (notification) => {
-        const id = Math.random().toString(36).substring(7);
-        set((state) => ({
-            notifications: [...state.notifications, { ...notification, id }],
-        }));
+            // Modals
+            activeModal: null,
+            openModal: (modalId) => set({ activeModal: modalId }),
+            closeModal: () => set({ activeModal: null }),
 
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            get().removeNotification(id);
-        }, 5000);
-    },
+            // Notifications
+            notifications: [],
 
-    removeNotification: (id) => {
-        set((state) => ({
-            notifications: state.notifications.filter((n) => n.id !== id),
-        }));
-    },
-}));
+            addNotification: (notification) => {
+                const id = Math.random().toString(36).substring(7);
+                set((state) => ({
+                    notifications: [...state.notifications, { ...notification, id }],
+                }));
+
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    get().removeNotification(id);
+                }, 5000);
+            },
+
+            removeNotification: (id) => {
+                set((state) => ({
+                    notifications: state.notifications.filter((n) => n.id !== id),
+                }));
+            },
+        }),
+        {
+            name: 'sangini-storage', // localStorage key
+            storage: createJSONStorage(() => localStorage),
+            // Only persist wallet state, not transient UI state
+            partialize: (state) => ({
+                wallet: state.wallet,
+                // Don't persist: invoices (fetched from API), selectedInvoice, notifications, modals
+            }),
+        }
+    )
+);
