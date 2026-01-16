@@ -30,11 +30,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const db = await getDb();
 
     // Find the invoice by MongoDB _id or invoiceId
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const searchConditions: any[] = [{ invoiceId: id }];
+    if (ObjectId.isValid(id)) {
+      searchConditions.unshift({ _id: new ObjectId(id) });
+    }
     const invoice = await db.collection('invoices').findOne({
-      $or: [
-        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
-        { invoiceId: id },
-      ],
+      $or: searchConditions,
     });
 
     if (!invoice) {

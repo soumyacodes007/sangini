@@ -6,25 +6,29 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { KycStatusBadge } from '@/components/ui/status-badge';
 import { KYCForm } from '@/components/kyc/kyc-form';
-import { 
-  Loader2, 
-  User, 
-  Wallet, 
-  Mail, 
-  ShieldCheck, 
-  Copy, 
+import {
+  Loader2,
+  User,
+  Wallet,
+  Mail,
+  ShieldCheck,
+  Copy,
   CheckCircle2,
-  ExternalLink 
+  ExternalLink
 } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, userType, walletAddress, kycStatus, isLoading } = useAuth();
+  const { user, userType, walletAddress, custodialPubKey, kycStatus, isLoading } = useAuth();
   const [copied, setCopied] = React.useState(false);
   const [showKycForm, setShowKycForm] = React.useState(false);
 
+  // Display address: use walletAddress for suppliers/investors, custodialPubKey for buyers
+  const displayAddress = walletAddress || custodialPubKey;
+  const isCustodialWallet = !walletAddress && !!custodialPubKey;
+
   const copyAddress = () => {
-    if (walletAddress) {
-      navigator.clipboard.writeText(walletAddress);
+    if (displayAddress) {
+      navigator.clipboard.writeText(displayAddress);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -80,15 +84,20 @@ export default function ProfilePage() {
             <span className="font-medium">{userType || 'Member'}</span>
           </div>
 
-          {walletAddress && (
+          {displayAddress && (
             <div className="flex items-center justify-between py-3">
               <div className="flex items-center gap-3">
                 <Wallet className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Wallet Address</span>
+                {isCustodialWallet && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                    Custodial
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm">
-                  {walletAddress.slice(0, 8)}...{walletAddress.slice(-4)}
+                  {displayAddress.slice(0, 8)}...{displayAddress.slice(-4)}
                 </span>
                 <Button variant="ghost" size="icon" onClick={copyAddress}>
                   {copied ? (
@@ -98,8 +107,8 @@ export default function ProfilePage() {
                   )}
                 </Button>
                 <Button variant="ghost" size="icon" asChild>
-                  <a 
-                    href={`https://stellar.expert/explorer/testnet/account/${walletAddress}`}
+                  <a
+                    href={`https://stellar.expert/explorer/testnet/account/${displayAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -158,7 +167,7 @@ export default function ProfilePage() {
           ) : (
             <div className="space-y-4">
               <p className="text-muted-foreground">
-                {kycStatus === 'REJECTED' 
+                {kycStatus === 'REJECTED'
                   ? 'Your previous KYC submission was rejected. Please resubmit with correct information.'
                   : 'Complete KYC verification to invest in invoices and access all platform features.'}
               </p>
@@ -172,24 +181,46 @@ export default function ProfilePage() {
       </Card>
 
       {/* Wallet Info for Buyers */}
-      {userType === 'BUYER' && (
+      {userType === 'BUYER' && isCustodialWallet && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5" />
-              Custodial Wallet
+              Custodial Wallet Info
             </CardTitle>
             <CardDescription>
-              Your transactions are handled through a secure custodial wallet
+              Your secure wallet for receiving and approving invoices
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <p className="text-sm">
-                As a buyer, you don&apos;t need to manage a Stellar wallet. 
-                All transactions (approvals, settlements) are processed through our 
-                secure meta-transaction system using your custodial wallet.
+                Your custodial wallet address is shown above. Share this address with
+                suppliers so they can create invoices for you. All transactions
+                (approvals, settlements) are processed securely through our
+                meta-transaction system - no manual wallet management needed.
               </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Quick share:</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyAddress}
+                className="gap-2"
+              >
+                {copied ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy Wallet Address
+                  </>
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>

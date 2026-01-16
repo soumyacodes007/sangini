@@ -88,7 +88,7 @@ export default function PortfolioPage() {
     // Step 2: Sign with Freighter
     const { signTransaction } = await import('@stellar/freighter-api');
     const StellarSdk = await import('@stellar/stellar-sdk');
-    
+
     const signResult = await signTransaction(xdr, {
       networkPassphrase: StellarSdk.Networks.TESTNET,
     });
@@ -102,7 +102,8 @@ export default function PortfolioPage() {
 
     // Step 3: Submit to network
     const server = new StellarSdk.rpc.Server('https://soroban-testnet.stellar.org');
-    const response = await server.sendTransaction(signedTx as StellarSdk.Transaction);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await server.sendTransaction(signedTx as any);
 
     if (response.status === 'PENDING') {
       let txResponse = await server.getTransaction(response.hash);
@@ -113,11 +114,11 @@ export default function PortfolioPage() {
       if (txResponse.status !== 'SUCCESS') {
         throw new Error('Transaction failed on-chain');
       }
-      
+
       // Extract order ID from transaction result if available
       // For now, generate a placeholder - the contract returns the order ID
       const orderId = `ORD-${Date.now()}`;
-      
+
       // Step 4: Confirm order in database
       await fetch('/api/orders', {
         method: 'PUT',
@@ -243,7 +244,7 @@ export default function PortfolioPage() {
                     return (
                       <tr key={holding.invoiceId} className="border-b last:border-0 hover:bg-muted/50">
                         <td className="py-3 px-2">
-                          <Link 
+                          <Link
                             href={`/dashboard/invoices/${holding.invoiceDbId}`}
                             className="font-medium hover:text-primary"
                           >
@@ -271,8 +272,8 @@ export default function PortfolioPage() {
                           <StatusBadge status={holding.status} size="sm" />
                         </td>
                         <td className="text-right py-3 px-2">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => handleSell(holding)}
                           >

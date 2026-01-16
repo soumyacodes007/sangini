@@ -13,21 +13,53 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { 
-      buyerAddress, 
-      amount, 
-      currency, 
-      dueDate, 
-      description, 
-      purchaseOrder, 
+    const {
+      buyerAddress: providedBuyerAddress,
+      buyerEmail,
+      amount,
+      currency,
+      dueDate,
+      description,
+      purchaseOrder,
       documentHash,
-      supplierAddress 
+      supplierAddress
     } = body;
 
-    // Validation
+    const db = await getDb();
+
+    // Resolve buyer address from email if provided
+    let buyerAddress = providedBuyerAddress;
+    let buyer = null;
+
+    if (buyerEmail && !buyerAddress) {
+      // Look up buyer by email
+      buyer = await db.collection('users').findOne({
+        email: buyerEmail.toLowerCase(),
+        userType: 'BUYER',
+      });
+
+      if (!buyer) {
+        return NextResponse.json(
+          { error: `No buyer found with email: ${buyerEmail}` },
+          { status: 404 }
+        );
+      }
+
+      // Get the buyer's wallet address (custodial or regular)
+      buyerAddress = buyer.custodialPubKey || buyer.walletAddress;
+
+      if (!buyerAddress) {
+        return NextResponse.json(
+          { error: 'Buyer does not have a wallet address configured' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validation - must have either buyerAddress or buyerEmail
     if (!buyerAddress || !amount || !currency || !dueDate || !description || !purchaseOrder) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields. Provide either buyerAddress or buyerEmail.' },
         { status: 400 }
       );
     }
@@ -40,15 +72,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = await getDb();
-
-    // Look up buyer by wallet address (could be their own wallet or custodial)
-    const buyer = await db.collection('users').findOne({
-      $or: [
-        { walletAddress: buyerAddress },
-        { custodialPubKey: buyerAddress }
-      ]
-    });
+    // Look up buyer by wallet address if not already found
+    if (!buyer) {
+      buyer = await db.collection('users').findOne({
+        $or: [
+          { walletAddress: buyerAddress },
+          { custodialPubKey: buyerAddress }
+        ]
+      });
+    }
 
     // Generate a unique invoice ID
     const invoiceCount = await db.collection('invoices').countDocuments();
@@ -61,6 +93,7 @@ export async function POST(request: NextRequest) {
       supplierAddress: supplierAddress || session.user.walletAddress,
       buyerId: buyer?._id || null,
       buyerAddress,
+      buyerEmail: buyerEmail || buyer?.email || null,
       amount,
       currency,
       dueDate: new Date(dueDate),

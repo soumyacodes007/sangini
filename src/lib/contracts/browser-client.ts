@@ -45,7 +45,8 @@ export async function submitWithFreighter(
     const signedTx = TransactionBuilder.fromXDR(signedXdr, Networks.TESTNET);
 
     // Submit to network
-    const response = await server.sendTransaction(signedTx as StellarSdk.Transaction);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await server.sendTransaction(signedTx as any);
 
     if (response.status === 'PENDING') {
         let txResponse = await server.getTransaction(response.hash);

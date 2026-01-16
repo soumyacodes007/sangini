@@ -9,11 +9,11 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { StartAuctionModal } from "@/components/invoice/start-auction-modal"
-import { 
-    Loader2, 
-    AlertCircle, 
-    FileText, 
-    ExternalLink, 
+import {
+    Loader2,
+    AlertCircle,
+    FileText,
+    ExternalLink,
     Gavel,
     PlusCircle,
     CheckCircle2,
@@ -27,14 +27,14 @@ export default function MyInvoicesPage() {
     const { userType } = useAuth()
     const freighterWallet = useFreighterWallet()
     const globalWallet = useStore(state => state.wallet)
-    const { invoices, loading, error: fetchError, refetch } = useInvoices({ 
-        role: 'supplier' 
+    const { invoices, loading, error: fetchError, refetch } = useInvoices({
+        role: 'supplier'
     })
-    
+
     // Use either freighter hook or global store for connection status
     const isConnected = freighterWallet.isConnected || globalWallet.isConnected
     const publicKey = freighterWallet.publicKey || globalWallet.address
-    
+
     const [selectedInvoice, setSelectedInvoice] = React.useState<typeof invoices[0] | null>(null)
     const [auctionModalOpen, setAuctionModalOpen] = React.useState(false)
     const [actionLoading, setActionLoading] = React.useState<string | null>(null)
@@ -43,40 +43,41 @@ export default function MyInvoicesPage() {
 
     const handleStartAuction = async (params: { duration: number; maxDiscount: number }) => {
         if (!selectedInvoice || !publicKey) return
-        
+
         setActionLoading(selectedInvoice.id)
         setError(null)
-        
+
         try {
             const durationHours = Math.ceil(params.duration / 3600)
             const maxDiscountBps = params.maxDiscount * 100
-            
+
             // Get the XDR from the API
             const res = await fetch(`/api/invoices/${selectedInvoice.id}/auction`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ durationHours, maxDiscountBps }),
             })
-            
+
             if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.error || 'Failed to prepare auction')
             }
-            
+
             const { xdr } = await res.json()
-            
+
             // Sign with Freighter
             const signResult = await signTransaction(xdr, {
                 networkPassphrase: StellarSdk.Networks.TESTNET,
             })
-            
+
             const signedXdr = signResult.signedTxXdr
             const signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXdr, StellarSdk.Networks.TESTNET)
-            
+
             // Submit to network
             const server = new StellarSdk.rpc.Server('https://soroban-testnet.stellar.org')
-            const response = await server.sendTransaction(signedTx as StellarSdk.Transaction)
-            
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const response = await server.sendTransaction(signedTx as any)
+
             if (response.status === 'PENDING') {
                 let txResponse = await server.getTransaction(response.hash)
                 while (txResponse.status === 'NOT_FOUND') {
@@ -87,14 +88,14 @@ export default function MyInvoicesPage() {
                     throw new Error('Transaction failed')
                 }
             }
-            
+
             // Confirm auction in database
             await fetch(`/api/invoices/${selectedInvoice.id}/auction`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ txHash: response.hash, durationHours, maxDiscountBps }),
             })
-            
+
             setSuccess(`Auction started for ${selectedInvoice.invoiceId}!`)
             setAuctionModalOpen(false)
             refetch()
@@ -194,7 +195,7 @@ export default function MyInvoicesPage() {
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-1">
                                         <CardTitle className="flex items-center gap-2">
-                                            <Link 
+                                            <Link
                                                 href={`/dashboard/invoices/${inv.id}`}
                                                 className="hover:text-primary"
                                             >
@@ -233,7 +234,7 @@ export default function MyInvoicesPage() {
                                     <div className="flex flex-col">
                                         <span className="text-muted-foreground">Document</span>
                                         {inv.documentHash ? (
-                                            <a 
+                                            <a
                                                 href={`https://gateway.pinata.cloud/ipfs/${inv.documentHash}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"

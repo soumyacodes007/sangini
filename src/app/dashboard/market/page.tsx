@@ -12,11 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select"
 import { TrendingUp, ShieldCheck, Loader2, AlertCircle, Wallet, Search, CheckCircle2 } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -27,7 +27,7 @@ export default function MarketplacePage() {
     const { publicKey, isConnected, connect } = useFreighterWallet()
     const { invoices, loading, error, refetch } = useInvoices({ status: 'FUNDING' })
     const router = useRouter()
-    
+
     const [selectedInvoice, setSelectedInvoice] = React.useState<typeof invoices[0] | null>(null)
     const [showInvestModal, setShowInvestModal] = React.useState(false)
     const [searchTerm, setSearchTerm] = React.useState("")
@@ -54,7 +54,7 @@ export default function MarketplacePage() {
         // Search filter
         if (searchTerm) {
             const term = searchTerm.toLowerCase()
-            result = result.filter(inv => 
+            result = result.filter(inv =>
                 inv.invoiceId?.toLowerCase().includes(term) ||
                 inv.description?.toLowerCase().includes(term) ||
                 inv.buyerName?.toLowerCase().includes(term)
@@ -66,10 +66,10 @@ export default function MarketplacePage() {
             switch (sortBy) {
                 case "discount":
                     // Higher discount first
-                    const discountA = a.startPrice && a.minPrice 
+                    const discountA = a.startPrice && a.minPrice
                         ? (parseInt(a.startPrice) - parseInt(a.minPrice)) / parseInt(a.startPrice)
                         : 0
-                    const discountB = b.startPrice && b.minPrice 
+                    const discountB = b.startPrice && b.minPrice
                         ? (parseInt(b.startPrice) - parseInt(b.minPrice)) / parseInt(b.startPrice)
                         : 0
                     return discountB - discountA
@@ -102,7 +102,7 @@ export default function MarketplacePage() {
             })
 
             const syncData = await syncRes.json()
-            
+
             if (!syncRes.ok) {
                 // If it's a relayer/admin issue, provide helpful message
                 if (syncData.error?.includes('admin') || syncData.error?.includes('Unauthorized') || syncData.error?.includes('relayer')) {
@@ -134,7 +134,7 @@ export default function MarketplacePage() {
         // Step 2: Sign with Freighter
         const { signTransaction } = await import('@stellar/freighter-api')
         const StellarSdk = await import('@stellar/stellar-sdk')
-        
+
         const signResult = await signTransaction(xdr, {
             networkPassphrase: StellarSdk.Networks.TESTNET,
         })
@@ -144,7 +144,8 @@ export default function MarketplacePage() {
 
         // Step 3: Submit to network
         const server = new StellarSdk.rpc.Server('https://soroban-testnet.stellar.org')
-        const response = await server.sendTransaction(signedTx as StellarSdk.Transaction)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const response = await server.sendTransaction(signedTx as any)
 
         if (response.status === 'PENDING') {
             let txResponse = await server.getTransaction(response.hash)
@@ -324,7 +325,7 @@ export default function MarketplacePage() {
                         <TrendingUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                         <h3 className="text-lg font-semibold mb-2">No Active Auctions</h3>
                         <p className="text-muted-foreground">
-                            {searchTerm 
+                            {searchTerm
                                 ? "No invoices match your search criteria."
                                 : "No verified invoices available for funding right now."}
                         </p>
