@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const db = await getDb();
-    
+
     // Build query based on filters
     const query: Record<string, unknown> = {};
 
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       const buyerConditions: Record<string, unknown>[] = [
         { buyerId: new ObjectId(session.user.id) }
       ];
-      
+
       if (session.user.walletAddress) {
         buyerConditions.push({ buyerAddress: session.user.walletAddress });
       }
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       if (session.user.email) {
         buyerConditions.push({ buyerEmail: session.user.email });
       }
-      
+
       // Combine with existing query using $and if status is set
       if (query.status) {
         query.$and = [
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
       } else {
         query.$or = buyerConditions;
       }
-      
+
       console.log('Buyer query conditions:', JSON.stringify(buyerConditions));
       console.log('User custodialPubKey:', user?.custodialPubKey);
       console.log('Session wallet:', session.user.walletAddress);
@@ -147,6 +147,10 @@ export async function GET(request: NextRequest) {
         totalTokens: inv.totalTokens,
         tokensSold: inv.tokensSold,
         tokensRemaining: inv.tokensRemaining,
+        // Payout tracking fields
+        amountRaised: inv.amountRaised,
+        lastPayoutAt: inv.lastPayoutAt,
+        fundedAt: inv.fundedAt,
       };
     });
 
@@ -236,9 +240,9 @@ export async function POST(request: NextRequest) {
 
     // Store pending invoice in database (will be confirmed after tx success)
     const db = await getDb();
-    
+
     // Look up buyer by wallet address
-    const buyer = await db.collection('users').findOne({ 
+    const buyer = await db.collection('users').findOne({
       $or: [
         { walletAddress: buyerAddress },
         { custodialPubKey: buyerAddress }

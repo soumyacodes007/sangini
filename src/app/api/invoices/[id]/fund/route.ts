@@ -197,6 +197,41 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       timestamp: new Date(),
     });
 
+    // Track supplier payout - contract takes 2% for insurance, rest goes to supplier
+    const paymentAmountBigInt = BigInt(paymentAmount || '0');
+    const insuranceCutBps = 200; // 2% insurance cut as per contract
+    const insuranceCut = (paymentAmountBigInt * BigInt(insuranceCutBps)) / BigInt(10000);
+    const supplierNetAmount = paymentAmountBigInt - insuranceCut;
+
+    await db.collection('supplier_payouts').insertOne({
+      invoiceId: invoice._id.toString(),
+      onChainInvoiceId: invoice.onChainId || invoice.invoiceId,
+      supplierId: invoice.supplierId,
+      supplierAddress: invoice.supplierAddress,
+      investorId: new ObjectId(session.user.id),
+      investorAddress: walletAddress,
+      paymentAmount: paymentAmount,
+      insuranceCut: insuranceCut.toString(),
+      netAmount: supplierNetAmount.toString(),
+      investmentTxHash: txHash,
+      timestamp: new Date(),
+      status: 'COMPLETED',
+    });
+
+    // Update invoice with total amount raised
+    const currentAmountRaised = BigInt(invoice.amountRaised || '0');
+    const newAmountRaised = currentAmountRaised + supplierNetAmount;
+
+    await db.collection('invoices').updateOne(
+      { _id: invoice._id },
+      {
+        $set: {
+          amountRaised: newAmountRaised.toString(),
+          lastPayoutAt: new Date(),
+        }
+      }
+    );
+
     return NextResponse.json({
       success: true,
       txHash,

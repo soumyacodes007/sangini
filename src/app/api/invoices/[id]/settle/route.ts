@@ -87,7 +87,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 7. Get settlement amount from contract (includes interest/penalties)
     // Use onChainId for contract calls
     const contractInvoiceId = invoice.onChainId || invoice.invoiceId || invoiceId;
-    
+
     let paymentAmount: bigint;
     try {
       paymentAmount = await getSettlementAmount(contractInvoiceId);
@@ -143,10 +143,57 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     );
 
+    // 13. Track investor distributions - each investor gets their proportional share
+    const investments = await db.collection('investments').find({
+      $or: [
+        { invoiceId: invoice._id.toString() },
+        { onChainInvoiceId: invoice.onChainId || invoice.invoiceId },
+      ],
+      status: 'COMPLETED',
+    }).toArray();
+
+    const totalTokens = BigInt(invoice.totalTokens || invoice.amount || '0');
+    const settlementAmount = paymentAmount;
+
+    for (const investment of investments) {
+      const investorTokens = BigInt(investment.tokenAmount || '0');
+      // Each investor gets: (their_tokens / total_tokens) * settlement_amount
+      const distributionAmount = totalTokens > BigInt(0)
+        ? (investorTokens * settlementAmount) / totalTokens
+        : BigInt(0);
+
+      await db.collection('investor_distributions').insertOne({
+        invoiceId: invoice._id.toString(),
+        onChainInvoiceId: invoice.onChainId || invoice.invoiceId,
+        investmentId: investment._id.toString(),
+        investorId: investment.investorId,
+        investorAddress: investment.investor || investment.investorAddress,
+        tokenAmount: investment.tokenAmount,
+        purchasePrice: investment.purchasePrice || investment.investedAmount,
+        distributionAmount: distributionAmount.toString(),
+        profit: (distributionAmount - BigInt(investment.purchasePrice || investment.investedAmount || '0')).toString(),
+        settlementTxHash: result.hash,
+        timestamp: new Date(),
+        status: 'COMPLETED',
+      });
+    }
+
+    // Log settlement transaction
+    await db.collection('transactions').insertOne({
+      type: 'SETTLEMENT',
+      invoiceId: invoice._id.toString(),
+      buyerAddress: user.custodialPubKey,
+      paymentAmount: paymentAmount.toString(),
+      txHash: result.hash,
+      investorCount: investments.length,
+      timestamp: new Date(),
+    });
+
     return NextResponse.json({
       success: true,
       txHash: result.hash,
       paymentAmount: paymentAmount.toString(),
+      investorsDistributed: investments.length,
       message: 'Invoice settled successfully',
     });
   } catch (error) {
@@ -183,7 +230,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Get settlement amount from contract using on-chain ID
     const contractInvoiceId = invoice.onChainId || invoice.invoiceId || invoiceId;
-    
+
     let settlementAmount: bigint;
     try {
       settlementAmount = await getSettlementAmount(contractInvoiceId);
