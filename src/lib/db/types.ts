@@ -3,7 +3,7 @@
 import { ObjectId } from 'mongodb';
 
 // Invoice Status matching smart contract
-export type InvoiceStatus = 
+export type InvoiceStatus =
   | 'DRAFT'
   | 'VERIFIED'
   | 'FUNDING'
@@ -41,53 +41,58 @@ export interface DbInvoice {
   _id: ObjectId;
   invoiceId: string;           // DB-generated ID (e.g., "INV-1768245932193-1")
   onChainId?: string;          // Actual contract invoice ID (e.g., "INV-1001")
-  
+
   // Parties
   supplierId: ObjectId;
   supplierAddress: string;
   buyerId?: ObjectId;
   buyerAddress: string;
-  
+
   // Financial
   amount: string;              // Store as string for precision
   currency: string;
-  
+
   // Dates
   createdAt: Date;
   dueDate: Date;
   verifiedAt?: Date;
   settledAt?: Date;
   mintedAt?: Date;             // When minted on-chain
-  
+
   // Status
   status: InvoiceStatus;
-  
+
   // Token details
   tokenSymbol?: string;
   totalTokens?: string;
   tokensSold?: string;
   tokensRemaining?: string;
-  
+
   // Metadata
   description: string;
   purchaseOrder: string;
   documentHash?: string;
-  
+
   // Auction
   auctionStart?: Date;
   auctionEnd?: Date;
   startPrice?: string;
   minPrice?: string;
   priceDropRate?: number;
-  
+
   // Settlement
   repaymentReceived?: string;
-  
+
+  // Payout tracking
+  amountRaised?: string;        // Total net amount raised from investors
+  lastPayoutAt?: Date;          // When last payout was received
+  fundedAt?: Date;              // When invoice became fully funded
+
   // Transaction hashes
   createTxHash?: string;
   verifyTxHash?: string;
   settleTxHash?: string;
-  
+
   updatedAt: Date;
 }
 

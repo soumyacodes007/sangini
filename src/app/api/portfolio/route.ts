@@ -7,7 +7,7 @@ import { ObjectId } from 'mongodb';
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -19,39 +19,70 @@ export async function GET() {
       return NextResponse.json({ holdings: [] });
     }
 
-    // Get user's investments - check both wallet address formats
+    // Get user's investments - check both wallet address formats and handle legacy records
+    // Legacy records may not have 'status' field, so we accept records without it too
     const investments = await db.collection('investments').find({
-      $or: [
-        { investor: walletAddress },
-        { investorAddress: walletAddress },
+      $and: [
+        // Match either wallet address field
+        {
+          $or: [
+            { investor: walletAddress },
+            { investorAddress: walletAddress },
+          ],
+        },
+        // Accept COMPLETED status OR no status field (legacy records)
+        {
+          $or: [
+            { status: 'COMPLETED' },
+            { status: { $exists: false } },
+          ],
+        },
       ],
-      status: 'COMPLETED',
     }).toArray();
-    
+
     console.log('Portfolio - Found investments for wallet:', walletAddress, 'Count:', investments.length);
 
     // Get invoice details for each investment
     const holdings = await Promise.all(
       investments.map(async (inv) => {
-        const invoice = await db.collection('invoices').findOne({
-          _id: new ObjectId(inv.invoiceId),
-        });
+        // Try multiple ways to find the invoice - supports different ID formats
+        let invoice = null;
+
+        // First try by MongoDB _id if it's a valid ObjectId
+        if (inv.invoiceId && ObjectId.isValid(inv.invoiceId)) {
+          invoice = await db.collection('invoices').findOne({
+            _id: new ObjectId(inv.invoiceId),
+          });
+        }
+
+        // If not found, try by invoiceId or onChainId strings
+        if (!invoice && (inv.invoiceId || inv.onChainInvoiceId)) {
+          invoice = await db.collection('invoices').findOne({
+            $or: [
+              { invoiceId: inv.invoiceId },
+              { invoiceId: inv.onChainInvoiceId },
+              { onChainId: inv.invoiceId },
+              { onChainId: inv.onChainInvoiceId },
+            ].filter(q => Object.values(q)[0] !== undefined),
+          });
+        }
 
         if (!invoice) return null;
 
         // Calculate current value (face value at maturity)
         const tokenAmount = parseInt(inv.tokenAmount || '0');
-        const purchasePrice = parseInt(inv.purchasePrice || inv.tokenAmount || '0');
-        
+        // Support both field names for backwards compatibility
+        const purchasePrice = parseInt(inv.purchasePrice || inv.investedAmount || inv.tokenAmount || '0');
+
         // Current value is face value (1:1 with tokens) if not settled
-        const currentValue = invoice.status === 'SETTLED' 
+        const currentValue = invoice.status === 'SETTLED'
           ? tokenAmount // Full face value
           : invoice.status === 'DEFAULTED'
-          ? Math.floor(tokenAmount * 0.5) // 50% insurance coverage
-          : tokenAmount; // Face value at maturity
+            ? Math.floor(tokenAmount * 0.5) // 50% insurance coverage
+            : tokenAmount; // Face value at maturity
 
         return {
-          invoiceId: invoice.invoiceId || invoice._id.toString(),
+          invoiceId: invoice.invoiceId || invoice.onChainId || invoice._id.toString(),
           invoiceDbId: invoice._id.toString(),
           tokenAmount: inv.tokenAmount,
           purchasePrice: purchasePrice.toString(),

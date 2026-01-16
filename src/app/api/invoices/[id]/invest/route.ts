@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Calculate discount
     const faceValue = BigInt(invoice.amount);
     const current = BigInt(currentPrice);
-    const discountBps = faceValue > 0 
+    const discountBps = faceValue > 0
       ? Number((faceValue - current) * BigInt(10000) / faceValue)
       : 0;
 
@@ -212,21 +212,25 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Record investment
+    // Record investment - using consistent structure with /fund endpoint
     await db.collection('investments').insertOne({
-      invoiceId: invoice.invoiceId,
+      invoiceId: invoice._id.toString(),
+      onChainInvoiceId: invoice.onChainId || invoice.invoiceId,
       investorId: new ObjectId(session.user.id),
-      investorAddress: session.user.walletAddress,
+      investor: session.user.walletAddress,  // Consistent with /fund endpoint
       tokenAmount,
-      investedAmount: paymentAmount,
-      investedAt: new Date(),
+      purchasePrice: paymentAmount,  // Consistent with /fund endpoint
+      investedAmount: paymentAmount, // Keep for backwards compatibility
       txHash,
+      timestamp: new Date(),
+      investedAt: new Date(),
+      status: 'COMPLETED',  // Required by portfolio query
     });
 
     // Update invoice token counts
     const newTokensSold = (BigInt(invoice.tokensSold || '0') + BigInt(tokenAmount)).toString();
     const newTokensRemaining = (BigInt(invoice.tokensRemaining || invoice.amount) - BigInt(tokenAmount)).toString();
-    
+
     const updateData: Record<string, unknown> = {
       tokensSold: newTokensSold,
       tokensRemaining: newTokensRemaining,
