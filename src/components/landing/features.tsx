@@ -57,28 +57,28 @@ const features = [
 
 export function Features() {
     return (
-        <section id="features" className="py-24 bg-muted/30">
+        <section id="features" className="py-24 bg-gray-950">
             <div className="container px-4 md:px-6">
                 <div className="flex flex-col items-center justify-center space-y-4 text-center mb-16">
-                    <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
-                        Built for Trust <span className="text-muted-foreground">Optimized for Speed</span>
+                    <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl text-white">
+                        Built for Trust <span className="text-white/50">Optimized for Speed</span>
                     </h2>
-                    <p className="max-w-[700px] text-muted-foreground md:text-xl">
-                        Sangini leveraging the Stellar blockchain to remove intermediaries, reduce costs, and prevent fraud through cryptographic verification.
+                    <p className="max-w-[700px] text-white/60 md:text-xl">
+                        Sangini leverages the Stellar blockchain to remove intermediaries, reduce costs, and prevent fraud through cryptographic verification.
                     </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {features.map((feature, i) => (
-                        <Card key={i} className="border-muted hover:border-primary/50 transition-colors">
+                        <Card key={i} className="border-white/10 bg-white/5 hover:border-rose-500/50 hover:bg-white/10 transition-all">
                             <CardHeader>
                                 <div className={`w-12 h-12 rounded-lg ${feature.bg} flex items-center justify-center mb-4`}>
                                     <feature.icon className={`w-6 h-6 ${feature.color}`} />
                                 </div>
-                                <CardTitle>{feature.title}</CardTitle>
+                                <CardTitle className="text-white">{feature.title}</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-muted-foreground">{feature.desc}</p>
+                                <p className="text-white/60">{feature.desc}</p>
                             </CardContent>
                         </Card>
                     ))}
