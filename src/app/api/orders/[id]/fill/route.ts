@@ -174,34 +174,48 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
 
     // Record as investment for the buyer
+    // Must include all fields required by portfolio query: investor, purchasePrice, status
     const existingInvestment = await db.collection('investments').findOne({
-      invoiceId: order.invoiceId,
-      investorAddress: session.user.walletAddress,
+      $or: [
+        { invoiceId: order.invoiceId, investor: session.user.walletAddress },
+        { invoiceId: order.invoiceId, investorAddress: session.user.walletAddress },
+      ],
     });
 
     if (existingInvestment) {
-      // Update existing investment
+      // Update existing investment - fix BUG-5: also update purchasePrice
+      const newTokenAmount = (BigInt(existingInvestment.tokenAmount || '0') + BigInt(tokenAmount)).toString();
+      const newPurchasePrice = (BigInt(existingInvestment.purchasePrice || existingInvestment.investedAmount || '0') + BigInt(paymentAmount)).toString();
+
       await db.collection('investments').updateOne(
         { _id: existingInvestment._id },
         {
           $set: {
-            tokenAmount: (BigInt(existingInvestment.tokenAmount) + BigInt(tokenAmount)).toString(),
-            investedAmount: (BigInt(existingInvestment.investedAmount) + BigInt(paymentAmount)).toString(),
+            tokenAmount: newTokenAmount,
+            investedAmount: newPurchasePrice,
+            purchasePrice: newPurchasePrice,  // BUG-5 fix: sync purchasePrice
+            investor: session.user.walletAddress,  // Ensure consistent field
+            status: 'COMPLETED',  // BUG-1 fix: ensure status is set
             updatedAt: new Date(),
           },
         }
       );
     } else {
-      // Create new investment record
+      // Create new investment record - fix BUG-1: add all required fields
       await db.collection('investments').insertOne({
         invoiceId: order.invoiceId,
+        onChainInvoiceId: order.invoiceId,  // May be same as invoiceId for orders
         investorId: new ObjectId(session.user.id),
-        investorAddress: session.user.walletAddress,
+        investor: session.user.walletAddress,  // BUG-1 fix: add 'investor' field
+        investorAddress: session.user.walletAddress,  // Keep for backwards compat
         tokenAmount,
-        investedAmount: paymentAmount,
+        purchasePrice: paymentAmount,  // BUG-1 fix: add 'purchasePrice' field
+        investedAmount: paymentAmount,  // Keep for backwards compat
         acquiredVia: 'SECONDARY_MARKET',
+        timestamp: new Date(),
         investedAt: new Date(),
         txHash,
+        status: 'COMPLETED',  // BUG-1 fix: add 'status' field
       });
     }
 

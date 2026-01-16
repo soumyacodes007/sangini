@@ -78,10 +78,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check user has holdings in this invoice
+    // Check user has holdings in this invoice - BUG-4 FIX: search by multiple ID formats
     const investment = await db.collection('investments').findOne({
-      invoiceId: invoice.invoiceId,
-      investorId: new ObjectId(session.user.id),
+      $and: [
+        // Match invoice by multiple ID formats
+        {
+          $or: [
+            { invoiceId: invoice._id.toString() },
+            { invoiceId: invoice.invoiceId },
+            { onChainInvoiceId: invoice.onChainId || invoice.invoiceId },
+          ],
+        },
+        // Match investor by multiple fields
+        {
+          $or: [
+            { investorId: new ObjectId(session.user.id) },
+            { investor: session.user.walletAddress },
+            { investorAddress: session.user.walletAddress },
+          ],
+        },
+      ],
     });
 
     if (!investment) {
@@ -216,6 +232,80 @@ export async function GET(request: NextRequest) {
     console.error('Get claims error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to get claims' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/insurance/claim - Confirm insurance claim after transaction success
+// BUG-6 FIX: Add confirmation endpoint
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { invoiceId, txHash, actualClaimAmount } = body;
+
+    if (!invoiceId || !txHash) {
+      return NextResponse.json(
+        { error: 'Invoice ID and transaction hash required' },
+        { status: 400 }
+      );
+    }
+
+    const db = await getDb();
+
+    // Find the pending claim
+    const claim = await db.collection('insurance_claims').findOne({
+      invoiceId,
+      investorId: new ObjectId(session.user.id),
+      status: 'PENDING',
+    });
+
+    if (!claim) {
+      return NextResponse.json(
+        { error: 'Pending claim not found' },
+        { status: 404 }
+      );
+    }
+
+    // Update claim to completed
+    await db.collection('insurance_claims').updateOne(
+      { _id: claim._id },
+      {
+        $set: {
+          status: 'COMPLETED',
+          txHash,
+          actualClaimAmount: actualClaimAmount || claim.expectedClaimAmount,
+          processedAt: new Date(),
+        },
+      }
+    );
+
+    // Record transaction
+    await db.collection('transactions').insertOne({
+      type: 'INSURANCE_CLAIM',
+      invoiceId,
+      investorId: new ObjectId(session.user.id),
+      investorAddress: session.user.walletAddress,
+      amount: actualClaimAmount || claim.expectedClaimAmount,
+      txHash,
+      timestamp: new Date(),
+    });
+
+    return NextResponse.json({
+      success: true,
+      txHash,
+      claimAmount: actualClaimAmount || claim.expectedClaimAmount,
+      message: 'Insurance claim confirmed',
+    });
+  } catch (error) {
+    console.error('Confirm claim error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to confirm claim' },
       { status: 500 }
     );
   }

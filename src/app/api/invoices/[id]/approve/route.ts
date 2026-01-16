@@ -51,9 +51,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // 4. Verify this user is the buyer for this invoice
+    // BUG-3 FIX: Also check if invoice.buyerAddress matches user's custodialPubKey
+    const user = await db.collection('users').findOne({
+      _id: new ObjectId(session.user.id),
+    });
+
     const isBuyer =
       invoice.buyerId?.toString() === session.user.id ||
-      invoice.buyerAddress === session.user.walletAddress;
+      invoice.buyerAddress === session.user.walletAddress ||
+      invoice.buyerAddress === user?.custodialPubKey;  // BUG-3 FIX
 
     if (!isBuyer) {
       return NextResponse.json(
@@ -70,11 +76,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // 6. Get user's custodial wallet
-    const user = await db.collection('users').findOne({
-      _id: new ObjectId(session.user.id),
-    });
-
+    // 6. Verify custodial wallet exists (user already fetched above)
     if (!user?.custodialSecret || !user?.custodialPubKey) {
       return NextResponse.json(
         { error: 'Custodial wallet not found. Please contact support.' },
@@ -92,9 +94,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 8. Build the approve_invoice transaction
     // Use onChainId (the actual contract invoice ID) if available, otherwise fall back
     const contractInvoiceId = invoice.onChainId || invoice.invoiceId || invoiceId;
-    
+
     console.log('Approving invoice with contract ID:', contractInvoiceId);
-    
+
     const txXdr = await buildInvoiceApprovalTx(
       contractInvoiceId,
       user.custodialPubKey

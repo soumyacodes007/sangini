@@ -57,24 +57,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Get investments for this invoice
+    // Get investments for this invoice - BUG-2 FIX: search by multiple ID formats
+    const investmentQuery = {
+      $or: [
+        { invoiceId: invoice._id.toString() },
+        { invoiceId: invoice.invoiceId },
+        { onChainInvoiceId: invoice.onChainId || invoice.invoiceId },
+      ].filter(q => Object.values(q)[0] !== undefined),
+    };
     const investments = await db
       .collection('investments')
-      .find({ invoiceId: invoice.invoiceId })
+      .find(investmentQuery)
       .toArray();
 
-    // Get open sell orders
+    // Get open sell orders - also fix to search by multiple IDs
+    const orderQuery = {
+      $or: [
+        { invoiceId: invoice._id.toString() },
+        { invoiceId: invoice.invoiceId },
+        { invoiceId: invoice.onChainId },
+      ].filter(q => Object.values(q)[0] !== undefined),
+      status: { $in: ['OPEN', 'PARTIALLY_FILLED'] }
+    };
     const sellOrders = await db
       .collection('sellOrders')
-      .find({ 
-        invoiceId: invoice.invoiceId,
-        status: { $in: ['OPEN', 'PARTIALLY_FILLED'] }
-      })
+      .find(orderQuery)
       .toArray();
 
     // Build response
-    const response: InvoiceResponse & { 
-      investments?: unknown[]; 
+    const response: InvoiceResponse & {
+      investments?: unknown[];
       sellOrders?: unknown[];
       onChainData?: unknown;
     } = {
@@ -102,21 +114,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       documentHash: invoice.documentHash,
       auction: invoice.auctionStart
         ? {
-            isActive: invoice.status === 'FUNDING',
-            startTime: invoice.auctionStart?.toISOString(),
-            endTime: invoice.auctionEnd?.toISOString(),
-            startPrice: invoice.startPrice,
-            currentPrice,
-            minPrice: invoice.minPrice,
-          }
+          isActive: invoice.status === 'FUNDING',
+          startTime: invoice.auctionStart?.toISOString(),
+          endTime: invoice.auctionEnd?.toISOString(),
+          startPrice: invoice.startPrice,
+          currentPrice,
+          minPrice: invoice.minPrice,
+        }
         : undefined,
       tokens: invoice.totalTokens
         ? {
-            symbol: invoice.tokenSymbol,
-            total: invoice.totalTokens,
-            sold: invoice.tokensSold,
-            remaining: invoice.tokensRemaining,
-          }
+          symbol: invoice.tokenSymbol,
+          total: invoice.totalTokens,
+          sold: invoice.tokensSold,
+          remaining: invoice.tokensRemaining,
+        }
         : undefined,
       investments: investments.map((inv) => ({
         id: inv._id.toString(),
