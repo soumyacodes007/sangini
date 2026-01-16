@@ -16,7 +16,8 @@ import {
     X,
     User,
     CreditCard,
-    LogOut
+    LogOut,
+    DollarSign
 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -30,6 +31,7 @@ const getRoutes = (userType?: string) => {
     const supplierRoutes = [
         { label: "Mint Invoice", icon: PlusCircle, href: "/dashboard/create" },
         { label: "My Invoices", icon: FileText, href: "/dashboard/invoices" },
+        { label: "Payouts", icon: DollarSign, href: "/dashboard/payouts" },
     ]
 
     const buyerRoutes = [
@@ -93,8 +95,8 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                         className={cn(
                             "group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all",
                             isActive
-                                ? "bg-primary text-primary-foreground font-semibold"
-                                : "text-foreground hover:bg-secondary"
+                                ? "bg-white/10 text-white font-semibold border border-white/20"
+                                : "text-white/60 hover:text-white hover:bg-white/5"
                         )}
                     >
                         <route.icon className="h-4 w-4" />
@@ -111,37 +113,37 @@ function UserStatus() {
 
     if (!isAuthenticated) {
         return (
-            <div className="mb-4 p-3 rounded-lg bg-muted/50">
+            <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="flex items-center gap-2 text-sm">
                     <div className="h-2 w-2 rounded-full bg-red-500" />
-                    <span className="text-muted-foreground">Not signed in</span>
+                    <span className="text-white/50">Not signed in</span>
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="mb-4 p-3 rounded-lg bg-muted/50 space-y-2">
+        <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
             <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User className="h-4 w-4 text-primary" />
+                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
+                    <User className="h-4 w-4 text-white/70" />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm font-medium truncate text-white">
                         {user?.name || user?.email || 'User'}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-white/50">
                         {userType || 'Member'}
                     </p>
                 </div>
             </div>
             {walletAddress && (
-                <p className="font-mono text-xs text-muted-foreground truncate">
+                <p className="font-mono text-xs text-white/40 truncate">
                     {walletAddress.slice(0, 8)}...{walletAddress.slice(-4)}
                 </p>
             )}
             {user?.email && !walletAddress && (
-                <p className="text-xs text-muted-foreground truncate">
+                <p className="text-xs text-white/40 truncate">
                     {user.email}
                 </p>
             )}
@@ -209,25 +211,25 @@ export function Sidebar() {
             </div>
 
             {/* Desktop Sidebar */}
-            <div className="hidden md:flex h-full w-[280px] flex-col border-r bg-card">
+            <div className="hidden md:flex h-full w-[280px] flex-col border-r border-white/10 bg-black/40 backdrop-blur-md">
                 <div className="p-6">
                     <div className="flex items-center gap-2 mb-8">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                            <span className="text-lg font-bold">S</span>
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-white to-white/80 shadow-lg shadow-white/10">
+                            <span className="text-lg font-bold text-black">S</span>
                         </div>
-                        <span className="text-xl font-bold tracking-tight">Sangini</span>
+                        <span className="text-xl font-bold tracking-tight text-white">Sangini</span>
                     </div>
                     <UserStatus />
                 </div>
                 <div className="flex-1 overflow-auto py-2">
                     <SidebarNav />
                 </div>
-                <div className="p-4 border-t space-y-2">
+                <div className="p-4 border-t border-white/10 space-y-2">
                     <WalletConnect />
                     {isAuthenticated && (
                         <Button
                             variant="ghost"
-                            className="w-full justify-start gap-2 text-muted-foreground"
+                            className="w-full justify-start gap-2 text-white/50 hover:text-white hover:bg-white/10"
                             onClick={() => logout()}
                         >
                             <LogOut className="h-4 w-4" />

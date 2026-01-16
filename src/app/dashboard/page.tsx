@@ -29,71 +29,71 @@ export default function DashboardPage() {
         <div className="p-8 space-y-8">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-                    <p className="text-muted-foreground mt-1">
+                    <h1 className="text-3xl font-bold tracking-tight text-white">Dashboard</h1>
+                    <p className="text-white/50 mt-1">
                         Welcome back{user?.name ? `, ${user.name}` : ''}!
                     </p>
                 </div>
                 {userType && (
-                    <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                    <span className="px-3 py-1 rounded-full bg-white/10 text-white border border-white/20 text-sm font-medium">
                         {userType}
                     </span>
                 )}
             </div>
 
             {error && (
-                <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
+                <div className="p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400">
                     {error}
                 </div>
             )}
 
             {/* Platform Stats */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
+                <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
-                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium text-white/70">Total Invoices</CardTitle>
+                        <FileText className="h-4 w-4 text-white/50" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{platform?.totalInvoices || 0}</div>
-                        <p className="text-xs text-muted-foreground">On-chain invoices</p>
+                        <div className="text-2xl font-bold text-white">{platform?.totalInvoices || 0}</div>
+                        <p className="text-xs text-white/40">On-chain invoices</p>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending Approvals</CardTitle>
-                        <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium text-white/70">Pending Approvals</CardTitle>
+                        <ShieldCheck className="h-4 w-4 text-white/50" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{platform?.invoicesByStatus?.DRAFT || 0}</div>
-                        <p className="text-xs text-muted-foreground">Awaiting verification</p>
+                        <div className="text-2xl font-bold text-white">{platform?.invoicesByStatus?.DRAFT || 0}</div>
+                        <p className="text-xs text-white/40">Awaiting verification</p>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Auctions</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium text-white/70">Active Auctions</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-white/50" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{platform?.invoicesByStatus?.FUNDING || 0}</div>
-                        <p className="text-xs text-muted-foreground">Open for investment</p>
+                        <div className="text-2xl font-bold text-white">{platform?.invoicesByStatus?.FUNDING || 0}</div>
+                        <p className="text-xs text-white/40">Open for investment</p>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Insurance Pool</CardTitle>
-                        <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                        <CardTitle className="text-sm font-medium text-white/70">Insurance Pool</CardTitle>
+                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-emerald-500">
-                            {platform?.insurancePoolBalance ? 
+                        <div className="text-2xl font-bold text-emerald-400">
+                            {platform?.insurancePoolBalance ?
                                 `${(parseInt(platform.insurancePoolBalance) / 10000000).toFixed(2)}` : '0'
                             }
                         </div>
-                        <p className="text-xs text-muted-foreground">XLM in pool</p>
+                        <p className="text-xs text-white/40">XLM in pool</p>
                     </CardContent>
                 </Card>
             </div>
@@ -101,31 +101,31 @@ export default function DashboardPage() {
             {/* User-specific Stats */}
             {userType === 'SUPPLIER' && userStats && (
                 <div className="grid gap-4 md:grid-cols-3">
-                    <Card>
+                    <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">My Invoices</CardTitle>
+                            <CardTitle className="text-sm font-medium text-white/70">My Invoices</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{userStats.totalInvoicesCreated || 0}</div>
-                            <p className="text-xs text-muted-foreground">Total created</p>
+                            <div className="text-2xl font-bold text-white">{userStats.totalInvoicesCreated || 0}</div>
+                            <p className="text-xs text-white/40">Total created</p>
                         </CardContent>
                     </Card>
-                    <Card>
+                    <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Amount Financed</CardTitle>
+                            <CardTitle className="text-sm font-medium text-white/70">Amount Financed</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">
+                            <div className="text-2xl font-bold text-white">
                                 {((userStats.totalAmountFinanced || 0) / 10000000).toFixed(2)} XLM
                             </div>
                         </CardContent>
                     </Card>
-                    <Card>
+                    <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Total Received</CardTitle>
+                            <CardTitle className="text-sm font-medium text-white/70">Total Received</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-emerald-500">
+                            <div className="text-2xl font-bold text-emerald-400">
                                 {((userStats.totalReceived || 0) / 10000000).toFixed(2)} XLM
                             </div>
                         </CardContent>
@@ -170,13 +170,13 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* Quick Actions */}
-            <div className="grid gap-4 md:grid-cols-3">
+            {/* Role-specific Quick Action */}
+            {userType === 'SUPPLIER' && (
                 <Card className="bg-primary text-primary-foreground">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center gap-2">
                             <PlusCircle className="h-5 w-5" />
-                            Supplier
+                            Create Invoice
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -186,12 +186,14 @@ export default function DashboardPage() {
                         </Button>
                     </CardContent>
                 </Card>
+            )}
 
+            {userType === 'BUYER' && (
                 <Card className="bg-emerald-600 text-white">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center gap-2">
                             <FileText className="h-5 w-5" />
-                            Buyer
+                            Pending Requests
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -201,12 +203,14 @@ export default function DashboardPage() {
                         </Button>
                     </CardContent>
                 </Card>
+            )}
 
+            {userType === 'INVESTOR' && (
                 <Card className="bg-blue-600 text-white">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-lg flex items-center gap-2">
                             <TrendingUp className="h-5 w-5" />
-                            Investor
+                            Marketplace
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -216,29 +220,29 @@ export default function DashboardPage() {
                         </Button>
                     </CardContent>
                 </Card>
-            </div>
+            )}
 
             {/* Recent Activity */}
             {stats?.recentActivity && stats.recentActivity.length > 0 && (
-                <Card>
+                <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                     <CardHeader>
-                        <CardTitle>Recent Activity</CardTitle>
+                        <CardTitle className="text-white">Recent Activity</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
                             {stats.recentActivity.map((activity) => (
-                                <div key={activity.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                                <div key={activity.id} className="flex items-center justify-between border-b border-white/10 pb-3 last:border-0">
                                     <div className="flex items-center gap-3">
-                                        <FileText className="h-4 w-4 text-muted-foreground" />
+                                        <FileText className="h-4 w-4 text-white/50" />
                                         <div>
-                                            <p className="font-medium">{activity.invoiceId}</p>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="font-medium text-white">{activity.invoiceId}</p>
+                                            <p className="text-xs text-white/40">
                                                 {new Date(activity.createdAt).toLocaleDateString()}
                                             </p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <span className="text-sm font-medium">
+                                        <span className="text-sm font-medium text-white">
                                             {activity.amount ? `${(parseInt(activity.amount) / 10000000).toFixed(2)} XLM` : '-'}
                                         </span>
                                         <StatusBadge status={activity.status} size="sm" />
@@ -251,12 +255,12 @@ export default function DashboardPage() {
             )}
 
             {platform?.totalInvoices === 0 && (
-                <Card className="border-dashed">
+                <Card className="border-dashed border-white/20 bg-white/5 backdrop-blur-md">
                     <CardContent className="flex flex-col items-center justify-center py-12">
-                        <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">No invoices yet</h3>
-                        <p className="text-muted-foreground text-center mb-4">Create your first invoice to get started.</p>
-                        <Button asChild>
+                        <FileText className="h-12 w-12 text-white/30 mb-4" />
+                        <h3 className="text-lg font-semibold mb-2 text-white">No invoices yet</h3>
+                        <p className="text-white/50 text-center mb-4">Create your first invoice to get started.</p>
+                        <Button asChild className="bg-white text-black hover:bg-white/90">
                             <Link href="/dashboard/create"><PlusCircle className="mr-2 h-4 w-4" />Create Invoice</Link>
                         </Button>
                     </CardContent>

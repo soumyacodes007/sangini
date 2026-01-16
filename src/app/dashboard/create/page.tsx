@@ -239,19 +239,19 @@ export default function CreateInvoicePage() {
     return (
         <div className="max-w-2xl mx-auto p-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight">Mint New Invoice</h1>
-                <p className="text-muted-foreground">Tokenize your accounts receivable on Stellar.</p>
+                <h1 className="text-3xl font-bold tracking-tight text-white">Mint New Invoice</h1>
+                <p className="text-white/50">Tokenize your accounts receivable on Stellar.</p>
             </div>
 
             {!isConnected && (
-                <Card className="mb-6 border-amber-500/50 bg-amber-500/10">
+                <Card className="mb-6 border-amber-500/30 bg-amber-500/10 backdrop-blur-md">
                     <CardContent className="flex items-center gap-4 p-4">
-                        <AlertCircle className="h-5 w-5 text-amber-500" />
+                        <AlertCircle className="h-5 w-5 text-amber-400" />
                         <div className="flex-1">
-                            <p className="font-medium">Wallet Required</p>
-                            <p className="text-sm text-muted-foreground">Connect your Freighter wallet to mint invoices on-chain.</p>
+                            <p className="font-medium text-white">Wallet Required</p>
+                            <p className="text-sm text-white/50">Connect your Freighter wallet to mint invoices on-chain.</p>
                         </div>
-                        <Button onClick={connect} className="gap-2">
+                        <Button onClick={connect} className="gap-2 bg-amber-500 hover:bg-amber-600 text-black">
                             <Wallet className="h-4 w-4" />
                             Connect
                         </Button>
@@ -259,16 +259,16 @@ export default function CreateInvoicePage() {
                 </Card>
             )}
 
-            <Card>
+            <Card className="bg-white/5 border-white/10 backdrop-blur-md">
                 <CardHeader>
-                    <CardTitle>Invoice Details</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-white">Invoice Details</CardTitle>
+                    <CardDescription className="text-white/50">
                         Enter the details of the invoice you want to finance.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {error && (
-                        <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+                        <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm flex items-center gap-2">
                             <AlertCircle className="h-4 w-4" />
                             {error}
                         </div>
@@ -276,19 +276,20 @@ export default function CreateInvoicePage() {
 
                     <form onSubmit={handleMint} className="space-y-6">
                         <div className="space-y-2">
-                            <Label htmlFor="desc">Description</Label>
+                            <Label htmlFor="desc" className="text-white/80">Description</Label>
                             <Input
                                 id="desc"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="e.g. Web Development Services"
                                 required
+                                className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-white/30"
                             />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="amount">Amount (XLM)</Label>
+                                <Label htmlFor="amount" className="text-white/80">Amount (XLM)</Label>
                                 <Input
                                     id="amount"
                                     type="number"
@@ -296,33 +297,35 @@ export default function CreateInvoicePage() {
                                     onChange={(e) => setAmount(e.target.value)}
                                     required
                                     min="1"
+                                    className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-white/30"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="date">Due Date</Label>
+                                <Label htmlFor="date" className="text-white/80">Due Date</Label>
                                 <Input
                                     id="date"
                                     type="date"
                                     value={dueDate}
                                     onChange={(e) => setDueDate(e.target.value)}
                                     required
+                                    className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-white/30"
                                 />
                             </div>
                         </div>
 
                         {/* Buyer Selection */}
                         <div className="space-y-4">
-                            <Label>Find Buyer</Label>
+                            <Label className="text-white/80">Find Buyer</Label>
 
                             {/* Search by email */}
                             <div className="relative">
                                 <div className="flex items-center">
                                     <div className="relative flex-1">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/40" />
                                         <Input
                                             value={buyerEmail}
                                             onChange={(e) => handleBuyerEmailChange(e.target.value)}
-                                            className="pl-10"
+                                            className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-white/30"
                                             placeholder="Search by buyer email or company name..."
                                             onFocus={() => buyerSearchResults.length > 0 && setShowSearchResults(true)}
                                             onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
