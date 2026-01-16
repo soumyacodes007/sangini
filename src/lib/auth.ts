@@ -17,6 +17,7 @@ declare module 'next-auth' {
       name?: string | null;
       userType: UserType;
       walletAddress?: string | null;
+      custodialPubKey?: string | null;
       kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
     };
   }
@@ -27,6 +28,7 @@ declare module 'next-auth' {
     name?: string | null;
     userType: UserType;
     walletAddress?: string | null;
+    custodialPubKey?: string | null;
     kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   }
 }
@@ -36,6 +38,7 @@ declare module 'next-auth/jwt' {
     id: string;
     userType: UserType;
     walletAddress?: string | null;
+    custodialPubKey?: string | null;
     kycStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   }
 }
@@ -78,6 +81,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           userType: user.userType,
           walletAddress: user.walletAddress,
+          custodialPubKey: user.custodialPubKey,
           kycStatus: user.kycStatus || 'PENDING',
         };
       },
@@ -176,6 +180,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.userType = user.userType;
         token.walletAddress = user.walletAddress;
+        token.custodialPubKey = user.custodialPubKey;
         token.kycStatus = user.kycStatus;
       }
       
@@ -203,6 +208,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.userType = token.userType;
         session.user.walletAddress = token.walletAddress;
+        session.user.custodialPubKey = token.custodialPubKey;
         session.user.kycStatus = token.kycStatus;
       }
       return session;

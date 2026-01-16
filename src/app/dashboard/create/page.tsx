@@ -12,7 +12,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FileUpload } from "@/components/ui/file-upload"
 import { useRouter } from "next/navigation"
-import { Loader2, AlertCircle, Wallet, FileText, CheckCircle2 } from "lucide-react"
+import { Loader2, AlertCircle, Wallet, FileText, CheckCircle2, Search, User } from "lucide-react"
+
+// Buyer search result type
+interface BuyerSearchResult {
+    id: string
+    email: string
+    name: string
+    companyName: string
+    walletAddress: string
+}
 
 export default function CreateInvoicePage() {
     const router = useRouter()
@@ -26,10 +35,65 @@ export default function CreateInvoicePage() {
     const defaultDueDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const [amount, setAmount] = React.useState("10000")
     const [buyerAddress, setBuyerAddress] = React.useState("")
+    const [buyerEmail, setBuyerEmail] = React.useState("")
     const [dueDate, setDueDate] = React.useState(defaultDueDate)
     const [description, setDescription] = React.useState("")
     const [documentCid, setDocumentCid] = React.useState<string | null>(null)
     const [documentName, setDocumentName] = React.useState<string | null>(null)
+
+    // Buyer search state
+    const [buyerSearchResults, setBuyerSearchResults] = React.useState<BuyerSearchResult[]>([])
+    const [isSearching, setIsSearching] = React.useState(false)
+    const [selectedBuyer, setSelectedBuyer] = React.useState<BuyerSearchResult | null>(null)
+    const [showSearchResults, setShowSearchResults] = React.useState(false)
+
+    // Debounced buyer search
+    const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+
+    const searchBuyers = React.useCallback(async (query: string) => {
+        if (query.length < 2) {
+            setBuyerSearchResults([])
+            return
+        }
+
+        setIsSearching(true)
+        try {
+            const response = await fetch(`/api/buyers/search?q=${encodeURIComponent(query)}`)
+            if (response.ok) {
+                const data = await response.json()
+                setBuyerSearchResults(data.buyers || [])
+                setShowSearchResults(true)
+            }
+        } catch (err) {
+            console.error('Buyer search error:', err)
+        } finally {
+            setIsSearching(false)
+        }
+    }, [])
+
+    const handleBuyerEmailChange = (value: string) => {
+        setBuyerEmail(value)
+        setSelectedBuyer(null)
+        setBuyerAddress("")
+
+        // Clear previous timeout
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current)
+        }
+
+        // Debounce the search
+        searchTimeoutRef.current = setTimeout(() => {
+            searchBuyers(value)
+        }, 300)
+    }
+
+    const handleSelectBuyer = (buyer: BuyerSearchResult) => {
+        setSelectedBuyer(buyer)
+        setBuyerEmail(buyer.email)
+        setBuyerAddress(buyer.walletAddress)
+        setShowSearchResults(false)
+        setBuyerSearchResults([])
+    }
 
     const handleDocumentUpload = (cid: string, fileName: string) => {
         setDocumentCid(cid)
@@ -45,16 +109,21 @@ export default function CreateInvoicePage() {
             return
         }
 
-        if (!buyerAddress) {
-            setError("Please enter a buyer address")
+        // Must have either buyer email (with selected buyer) or manual wallet address
+        if (!selectedBuyer && !buyerAddress) {
+            setError("Please search for a buyer by email or enter a wallet address manually")
             return
         }
 
-        // Validate buyer address format
-        if (!buyerAddress.startsWith('G') || buyerAddress.length !== 56) {
-            setError("Invalid buyer wallet address. Must be a valid Stellar address starting with 'G'")
-            return
+        // If manual address provided, validate format
+        if (buyerAddress && !selectedBuyer) {
+            if (!buyerAddress.startsWith('G') || buyerAddress.length !== 56) {
+                setError("Invalid buyer wallet address. Must be a valid Stellar address starting with 'G'")
+                return
+            }
         }
+
+        const effectiveBuyerAddress = selectedBuyer?.walletAddress || buyerAddress
 
         setIsLoading(true)
 
@@ -64,12 +133,13 @@ export default function CreateInvoicePage() {
             const dueDateTimestamp = Math.floor(new Date(dueDate).getTime() / 1000)
             const purchaseOrder = `PO-${Date.now()}`
 
-            // First, save to database
+            // First, save to database - use buyerEmail if available
             const dbResponse = await fetch('/api/invoices/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    buyerAddress,
+                    buyerAddress: effectiveBuyerAddress,
+                    buyerEmail: selectedBuyer?.email || buyerEmail || undefined,
                     amount: amountInStroops.toString(),
                     currency: 'XLM',
                     dueDate: new Date(dueDate).toISOString(),
@@ -89,7 +159,7 @@ export default function CreateInvoicePage() {
             // Call the real contract
             const invoiceId = await mintDraftBrowser(
                 publicKey,
-                buyerAddress,
+                effectiveBuyerAddress,
                 amountInStroops,
                 'XLM',
                 dueDateTimestamp,
@@ -103,7 +173,7 @@ export default function CreateInvoicePage() {
                 await fetch(`/api/invoices/${dbInvoiceId}/confirm`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         onChainId: invoiceId,
                         status: 'DRAFT'
                     }),
@@ -127,7 +197,7 @@ export default function CreateInvoicePage() {
             addInvoice({
                 id: invoiceId,
                 supplier: publicKey,
-                buyer: buyerAddress,
+                buyer: effectiveBuyerAddress,
                 amount: amountInStroops.toString(),
                 currency: 'XLM',
                 createdAt: Math.floor(Date.now() / 1000),
@@ -240,19 +310,106 @@ export default function CreateInvoicePage() {
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="buyer">Buyer Wallet Address</Label>
-                            <Input
-                                id="buyer"
-                                value={buyerAddress}
-                                onChange={(e) => setBuyerAddress(e.target.value)}
-                                className="font-mono text-xs"
-                                placeholder="G..."
-                                required
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Enter the buyer&apos;s Stellar wallet address (or their custodial wallet address)
-                            </p>
+                        {/* Buyer Selection */}
+                        <div className="space-y-4">
+                            <Label>Find Buyer</Label>
+
+                            {/* Search by email */}
+                            <div className="relative">
+                                <div className="flex items-center">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            value={buyerEmail}
+                                            onChange={(e) => handleBuyerEmailChange(e.target.value)}
+                                            className="pl-10"
+                                            placeholder="Search by buyer email or company name..."
+                                            onFocus={() => buyerSearchResults.length > 0 && setShowSearchResults(true)}
+                                            onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                                        />
+                                        {isSearching && (
+                                            <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Search results dropdown */}
+                                {showSearchResults && buyerSearchResults.length > 0 && (
+                                    <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+                                        {buyerSearchResults.map((buyer) => (
+                                            <button
+                                                key={buyer.id}
+                                                type="button"
+                                                className="w-full px-4 py-3 text-left hover:bg-muted/50 flex items-center gap-3 border-b last:border-b-0"
+                                                onClick={() => handleSelectBuyer(buyer)}
+                                            >
+                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                                    <User className="h-4 w-4 text-primary" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium text-sm truncate">
+                                                        {buyer.name || buyer.email}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground truncate">
+                                                        {buyer.companyName && `${buyer.companyName} • `}{buyer.email}
+                                                    </p>
+                                                </div>
+                                                <div className="text-xs text-muted-foreground font-mono">
+                                                    {buyer.walletAddress.slice(0, 8)}...
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Selected buyer display */}
+                            {selectedBuyer && (
+                                <div className="p-4 rounded-lg border bg-emerald-500/5 border-emerald-500/20">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">{selectedBuyer.name || selectedBuyer.email}</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {selectedBuyer.companyName && `${selectedBuyer.companyName} • `}
+                                                    <span className="font-mono">{selectedBuyer.walletAddress.slice(0, 12)}...</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setSelectedBuyer(null)
+                                                setBuyerEmail("")
+                                                setBuyerAddress("")
+                                            }}
+                                        >
+                                            Clear
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Manual address fallback */}
+                            {!selectedBuyer && (
+                                <div className="space-y-2">
+                                    <p className="text-xs text-muted-foreground">
+                                        Or enter wallet address manually:
+                                    </p>
+                                    <Input
+                                        id="buyer"
+                                        value={buyerAddress}
+                                        onChange={(e) => setBuyerAddress(e.target.value)}
+                                        className="font-mono text-xs"
+                                        placeholder="G..."
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {/* Document Upload */}
@@ -273,9 +430,9 @@ export default function CreateInvoicePage() {
                                                 {documentCid}
                                             </p>
                                         </div>
-                                        <Button 
+                                        <Button
                                             type="button"
-                                            variant="ghost" 
+                                            variant="ghost"
                                             size="sm"
                                             onClick={() => {
                                                 setDocumentCid(null)

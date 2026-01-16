@@ -10,12 +10,12 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { StartAuctionModal } from "@/components/invoice/start-auction-modal"
-import { 
-    ArrowLeft, 
-    Loader2, 
-    Calendar, 
-    User, 
-    FileText, 
+import {
+    ArrowLeft,
+    Loader2,
+    Calendar,
+    User,
+    FileText,
     Clock,
     TrendingUp,
     ExternalLink,
@@ -32,11 +32,11 @@ export default function InvoiceDetailPage() {
     const freighterWallet = useFreighterWallet()
     const globalWallet = useStore(state => state.wallet)
     const { invoice, loading, error, refetch } = useInvoice(params.id as string)
-    
+
     // Use either freighter hook or global store for connection status
     const isConnected = freighterWallet.isConnected || globalWallet.isConnected
     const publicKey = freighterWallet.publicKey || globalWallet.address
-    
+
     // Auction modal state
     const [auctionModalOpen, setAuctionModalOpen] = React.useState(false)
     const [actionLoading, setActionLoading] = React.useState(false)
@@ -44,16 +44,16 @@ export default function InvoiceDetailPage() {
 
     const handleStartAuction = async (params: { duration: number; maxDiscount: number }) => {
         if (!invoice || !publicKey) return
-        
+
         setActionLoading(true)
         setActionError(null)
-        
+
         try {
             // Convert duration from seconds to hours
             const durationHours = Math.ceil(params.duration / 3600)
             // Convert discount percent to basis points
             const maxDiscountBps = params.maxDiscount * 100
-            
+
             // Get the XDR from the API
             const res = await fetch(`/api/invoices/${invoice.id}/auction`, {
                 method: 'POST',
@@ -63,38 +63,39 @@ export default function InvoiceDetailPage() {
                     maxDiscountBps,
                 }),
             })
-            
+
             if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.error || 'Failed to prepare auction')
             }
-            
+
             const { xdr } = await res.json()
-            
+
             // Sign with Freighter
             const signResult = await signTransaction(xdr, {
                 networkPassphrase: StellarSdk.Networks.TESTNET,
             })
-            
+
             const signedXdr = signResult.signedTxXdr
             const signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXdr, StellarSdk.Networks.TESTNET)
-            
+
             // Submit to network
             const server = new StellarSdk.rpc.Server('https://soroban-testnet.stellar.org')
-            const response = await server.sendTransaction(signedTx as StellarSdk.Transaction)
-            
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const response = await server.sendTransaction(signedTx as any)
+
             if (response.status === 'PENDING') {
                 let txResponse = await server.getTransaction(response.hash)
                 while (txResponse.status === 'NOT_FOUND') {
                     await new Promise(resolve => setTimeout(resolve, 1000))
                     txResponse = await server.getTransaction(response.hash)
                 }
-                
+
                 if (txResponse.status !== 'SUCCESS') {
                     throw new Error('Transaction failed')
                 }
             }
-            
+
             // Confirm auction in database
             await fetch(`/api/invoices/${invoice.id}/auction`, {
                 method: 'PUT',
@@ -105,7 +106,7 @@ export default function InvoiceDetailPage() {
                     maxDiscountBps,
                 }),
             })
-            
+
             // Refresh invoice data
             refetch()
             setAuctionModalOpen(false)
@@ -281,11 +282,11 @@ export default function InvoiceDetailPage() {
                                 {/* Progress bar */}
                                 <div className="mt-3">
                                     <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                        <div 
+                                        <div
                                             className="h-full bg-emerald-500 transition-all"
-                                            style={{ 
-                                                width: `${invoice.totalTokens ? 
-                                                    (parseInt(invoice.tokensSold || '0') / parseInt(invoice.totalTokens) * 100) : 0}%` 
+                                            style={{
+                                                width: `${invoice.totalTokens ?
+                                                    (parseInt(invoice.tokensSold || '0') / parseInt(invoice.totalTokens) * 100) : 0}%`
                                             }}
                                         />
                                     </div>
@@ -307,7 +308,7 @@ export default function InvoiceDetailPage() {
                             {actionError}
                         </div>
                     )}
-                    
+
                     {/* Status-based guidance */}
                     {invoice.status === 'DRAFT' && userType === 'SUPPLIER' && (
                         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 text-sm">
@@ -317,7 +318,7 @@ export default function InvoiceDetailPage() {
                             </p>
                         </div>
                     )}
-                    
+
                     {invoice.status === 'VERIFIED' && userType === 'SUPPLIER' && !isConnected && (
                         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 text-sm">
                             <p className="font-medium">Wallet Not Connected</p>
@@ -326,7 +327,7 @@ export default function InvoiceDetailPage() {
                             </p>
                         </div>
                     )}
-                    
+
                     <div className="flex flex-wrap gap-3">
                         {invoice.status === 'DRAFT' && userType === 'BUYER' && (
                             <Button className="bg-emerald-600 hover:bg-emerald-700">
@@ -334,7 +335,7 @@ export default function InvoiceDetailPage() {
                             </Button>
                         )}
                         {invoice.status === 'VERIFIED' && userType === 'SUPPLIER' && (
-                            <Button 
+                            <Button
                                 onClick={() => setAuctionModalOpen(true)}
                                 disabled={!isConnected || actionLoading}
                             >
@@ -354,7 +355,7 @@ export default function InvoiceDetailPage() {
                         )}
                         {invoice.documentHash && (
                             <Button variant="outline" asChild>
-                                <a 
+                                <a
                                     href={`https://gateway.pinata.cloud/ipfs/${invoice.documentHash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"

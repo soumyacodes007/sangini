@@ -12,6 +12,7 @@ export function useAuth() {
   const user = session?.user;
   const userType = session?.user?.userType;
   const walletAddress = session?.user?.walletAddress;
+  const custodialPubKey = session?.user?.custodialPubKey;
   const kycStatus = session?.user?.kycStatus;
 
   const login = async (provider: 'credentials' | 'wallet', credentials?: {
@@ -64,6 +65,7 @@ export function useAuth() {
     isAuthenticated,
     userType,
     walletAddress,
+    custodialPubKey,
     kycStatus,
     isKycApproved,
     login,

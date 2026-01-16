@@ -53,12 +53,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Find the invoice
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const searchConditions1: any[] = [{ invoiceId: id }, { onChainId: id }];
+    if (ObjectId.isValid(id)) {
+      searchConditions1.unshift({ _id: new ObjectId(id) });
+    }
     const invoice = await db.collection('invoices').findOne({
-      $or: [
-        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
-        { invoiceId: id },
-        { onChainId: id },
-      ],
+      $or: searchConditions1,
     });
 
     if (!invoice) {
@@ -93,18 +94,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     } catch (buildError) {
       console.error('Build invest tx error:', buildError);
       const errorMessage = buildError instanceof Error ? buildError.message : 'Unknown error';
-      
+
       // Check for KYC error
       if (errorMessage.includes('#7') || errorMessage.includes('KYC')) {
         return NextResponse.json(
-          { 
+          {
             error: 'On-chain KYC verification required. Your KYC may not be synced to the blockchain. Please try again or contact support.',
             code: 'KYC_REQUIRED'
           },
           { status: 403 }
         );
       }
-      
+
       throw buildError;
     }
   } catch (error) {
@@ -136,12 +137,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const walletAddress = investorAddress || session.user.walletAddress;
 
     // Find the invoice
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const searchConditions2: any[] = [{ invoiceId: id }, { onChainId: id }];
+    if (ObjectId.isValid(id)) {
+      searchConditions2.unshift({ _id: new ObjectId(id) });
+    }
     const invoice = await db.collection('invoices').findOne({
-      $or: [
-        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
-        { invoiceId: id },
-        { onChainId: id },
-      ],
+      $or: searchConditions2,
     });
 
     if (!invoice) {
