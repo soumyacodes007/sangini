@@ -144,34 +144,95 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
 
     // 13. Track investor distributions - each investor gets their proportional share
+    // CRITICAL: Find ALL token holders, including those who bought on secondary market
+    // Must check multiple ID formats and exclude sold investments
+    const invoiceIdStr = invoice._id.toString();
+    const onChainId = invoice.onChainId || invoice.invoiceId;
+
     const investments = await db.collection('investments').find({
-      $or: [
-        { invoiceId: invoice._id.toString() },
-        { onChainInvoiceId: invoice.onChainId || invoice.invoiceId },
+      $and: [
+        {
+          $or: [
+            { invoiceId: invoiceIdStr },
+            { invoiceId: onChainId },
+            { onChainInvoiceId: invoiceIdStr },
+            { onChainInvoiceId: onChainId },
+          ],
+        },
+        {
+          // Only include active investments (not sold, not pending)
+          $or: [
+            { status: 'COMPLETED' },
+            { status: { $exists: false } },  // Legacy records
+          ],
+        },
+        {
+          // Exclude investments with 0 tokens (fully sold on secondary)
+          tokenAmount: { $ne: '0' },
+        },
       ],
-      status: 'COMPLETED',
     }).toArray();
 
-    const totalTokens = BigInt(invoice.totalTokens || invoice.amount || '0');
+    console.log(`Settlement: Found ${investments.length} investors for invoice ${onChainId}`);
+
+    // CRITICAL FIX: Deduplicate investments by investor address
+    // Multiple investment records can exist for same investor (primary + secondary purchases)
+    // We need to aggregate them to avoid counting tokens multiple times
+    const investmentsByInvestor = new Map();
+
+    for (const inv of investments) {
+      const investorKey = inv.investor || inv.investorAddress;
+      
+      if (!investmentsByInvestor.has(investorKey)) {
+        investmentsByInvestor.set(investorKey, {
+          investorId: inv.investorId,
+          investorAddress: investorKey,
+          tokenAmount: BigInt(0),
+          purchasePrice: BigInt(0),
+          investments: [],
+        });
+      }
+
+      const aggregated = investmentsByInvestor.get(investorKey);
+      aggregated.tokenAmount += BigInt(inv.tokenAmount || '0');
+      aggregated.purchasePrice += BigInt(inv.purchasePrice || inv.investedAmount || '0');
+      aggregated.investments.push(inv);
+    }
+
+    console.log(`Settlement: Aggregated to ${investmentsByInvestor.size} unique investors`);
+
+    // Calculate total tokens from aggregated holdings
+    const totalTokensHeld = Array.from(investmentsByInvestor.values()).reduce((sum, inv) => {
+      return sum + inv.tokenAmount;
+    }, BigInt(0));
+
+    console.log(`Settlement: Total tokens held by investors: ${totalTokensHeld.toString()}`);
+
+    // Use the larger of: actual holdings or invoice total (safety check)
+    const totalTokens = totalTokensHeld > BigInt(0)
+      ? totalTokensHeld
+      : BigInt(invoice.totalTokens || invoice.amount || '0');
     const settlementAmount = paymentAmount;
 
-    for (const investment of investments) {
-      const investorTokens = BigInt(investment.tokenAmount || '0');
+    // Distribute to aggregated investors
+    for (const [investorAddress, aggregated] of investmentsByInvestor.entries()) {
+      const investorTokens = aggregated.tokenAmount;
       // Each investor gets: (their_tokens / total_tokens) * settlement_amount
       const distributionAmount = totalTokens > BigInt(0)
         ? (investorTokens * settlementAmount) / totalTokens
         : BigInt(0);
 
+      // Create one distribution record per investor (not per investment)
       await db.collection('investor_distributions').insertOne({
         invoiceId: invoice._id.toString(),
         onChainInvoiceId: invoice.onChainId || invoice.invoiceId,
-        investmentId: investment._id.toString(),
-        investorId: investment.investorId,
-        investorAddress: investment.investor || investment.investorAddress,
-        tokenAmount: investment.tokenAmount,
-        purchasePrice: investment.purchasePrice || investment.investedAmount,
+        investmentId: aggregated.investments[0]._id.toString(), // Reference first investment
+        investorId: aggregated.investorId,
+        investorAddress: investorAddress,
+        tokenAmount: investorTokens.toString(),
+        purchasePrice: aggregated.purchasePrice.toString(),
         distributionAmount: distributionAmount.toString(),
-        profit: (distributionAmount - BigInt(investment.purchasePrice || investment.investedAmount || '0')).toString(),
+        profit: (distributionAmount - aggregated.purchasePrice).toString(),
         settlementTxHash: result.hash,
         timestamp: new Date(),
         status: 'COMPLETED',
@@ -185,7 +246,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       buyerAddress: user.custodialPubKey,
       paymentAmount: paymentAmount.toString(),
       txHash: result.hash,
-      investorCount: investments.length,
+      investorCount: investmentsByInvestor.size,
       timestamp: new Date(),
     });
 
@@ -193,7 +254,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       success: true,
       txHash: result.hash,
       paymentAmount: paymentAmount.toString(),
-      investorsDistributed: investments.length,
+      investorsDistributed: investmentsByInvestor.size,
       message: 'Invoice settled successfully',
     });
   } catch (error) {

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import * as freighterApi from "@stellar/freighter-api"
+import { useStore } from "@/lib/store"
 
 export interface WalletState {
     isInstalled: boolean
@@ -20,6 +21,7 @@ export function useFreighterWallet() {
         error: null,
     })
     const [isLoading, setIsLoading] = React.useState(true)
+    const walletStore = useStore((state) => state.wallet)
 
     // Check if Freighter is installed and already connected on mount
     React.useEffect(() => {
@@ -39,25 +41,30 @@ export function useFreighterWallet() {
                         error: null,
                     }))
                     
-                    // Check if already connected and get address
-                    try {
-                        const addressResult = await freighterApi.getAddress()
-                        console.log("getAddress result:", addressResult)
-                        
-                        if (addressResult.address && !addressResult.error) {
-                            // Wallet is already connected
-                            const networkResult = await freighterApi.getNetworkDetails()
-                            setState({
-                                isInstalled: true,
-                                isConnected: true,
-                                publicKey: addressResult.address,
-                                network: networkResult.network || "TESTNET",
-                                error: null,
-                            })
+                    // Only auto-reconnect if wallet was previously connected in our store
+                    // This prevents auto-reconnecting after logout
+                    if (walletStore.isConnected && walletStore.address) {
+                        try {
+                            const addressResult = await freighterApi.getAddress()
+                            console.log("getAddress result:", addressResult)
+                            
+                            if (addressResult.address && !addressResult.error) {
+                                // Wallet is already connected
+                                const networkResult = await freighterApi.getNetworkDetails()
+                                setState({
+                                    isInstalled: true,
+                                    isConnected: true,
+                                    publicKey: addressResult.address,
+                                    network: networkResult.network || "TESTNET",
+                                    error: null,
+                                })
+                            }
+                        } catch (addrErr) {
+                            // Not connected yet, that's fine
+                            console.log("Wallet not connected yet:", addrErr)
                         }
-                    } catch (addrErr) {
-                        // Not connected yet, that's fine
-                        console.log("Wallet not connected yet:", addrErr)
+                    } else {
+                        console.log("Wallet store cleared - not auto-reconnecting")
                     }
                 } else {
                     setState(prev => ({
@@ -79,7 +86,7 @@ export function useFreighterWallet() {
 
         // Wait a moment for extension
         setTimeout(checkWallet, 500)
-    }, [])
+    }, [walletStore.isConnected, walletStore.address])
 
     const connect = async (): Promise<boolean> => {
         setIsLoading(true)

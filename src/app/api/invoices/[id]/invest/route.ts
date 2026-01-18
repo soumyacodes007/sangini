@@ -36,11 +36,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Get current price from contract
+    // Get current price from contract - use onChainId for contract calls
+    const contractInvoiceId = invoice.onChainId || invoice.invoiceId;
     let currentPrice: string = invoice.amount;
-    if (invoice.invoiceId && (invoice.status === 'FUNDING' || invoice.status === 'VERIFIED')) {
+    if (contractInvoiceId && (invoice.status === 'FUNDING' || invoice.status === 'VERIFIED')) {
       try {
-        const price = await getCurrentPrice(invoice.invoiceId);
+        const price = await getCurrentPrice(contractInvoiceId);
         currentPrice = price.toString();
       } catch {
         // Use face value if auction not started
@@ -104,17 +105,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Investors must have a wallet
-    if (!session.user.walletAddress) {
+    // Use Freighter wallet if provided, fall back to session wallet
+    const { id } = await params;
+    const body: InvestRequest & { investorAddress?: string } = await request.json();
+    const { tokenAmount, investorAddress } = body;
+
+    // Use provided investorAddress (from Freighter) or fall back to session wallet
+    const walletAddress = investorAddress || session.user.walletAddress;
+    if (!walletAddress) {
       return NextResponse.json(
-        { error: 'Wallet not connected' },
+        { error: 'Wallet not connected. Please connect your Freighter wallet.' },
         { status: 400 }
       );
     }
-
-    const { id } = await params;
-    const body: InvestRequest = await request.json();
-    const { tokenAmount } = body;
 
     if (!tokenAmount || BigInt(tokenAmount) <= 0) {
       return NextResponse.json(
@@ -147,10 +150,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Use onChainId for contract calls
+    const contractInvoiceId = invoice.onChainId || invoice.invoiceId;
+
     // Get current price
     let currentPrice: bigint;
     try {
-      currentPrice = await getCurrentPrice(invoice.invoiceId);
+      currentPrice = await getCurrentPrice(contractInvoiceId);
     } catch {
       currentPrice = BigInt(invoice.amount);
     }
@@ -159,10 +165,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const totalTokens = BigInt(invoice.totalTokens || invoice.amount);
     const paymentAmount = (BigInt(tokenAmount) * currentPrice) / totalTokens;
 
-    // Build invest transaction
+    // Build invest transaction using the on-chain invoice ID and Freighter wallet
     const txXdr = await buildInvestTx(
-      invoice.invoiceId,
-      session.user.walletAddress,
+      contractInvoiceId,
+      walletAddress,  // Use Freighter wallet, not session wallet
       BigInt(tokenAmount)
     );
 

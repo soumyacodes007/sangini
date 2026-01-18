@@ -197,9 +197,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       timestamp: new Date(),
     });
 
-    // Track supplier payout - contract takes 2% for insurance, rest goes to supplier
+    // Track supplier payout - contract takes 5% for insurance, rest goes to supplier
     const paymentAmountBigInt = BigInt(paymentAmount || '0');
-    const insuranceCutBps = 200; // 2% insurance cut as per contract
+    const insuranceCutBps = 500; // 5% insurance cut (matches CONTRACT_CONFIG.INSURANCE_CUT_BPS)
     const insuranceCut = (paymentAmountBigInt * BigInt(insuranceCutBps)) / BigInt(10000);
     const supplierNetAmount = paymentAmountBigInt - insuranceCut;
 

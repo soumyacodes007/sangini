@@ -56,9 +56,16 @@ export async function GET(request: NextRequest) {
         myInvoices[s._id || 'UNKNOWN'] = { count: s.count, amount: s.totalAmount };
       });
 
-      const totalReceived = await db.collection('invoices').aggregate([
-        { $match: { supplierId: userId, status: 'SETTLED' } },
-        { $group: { _id: null, total: { $sum: { $toLong: '$repaymentReceived' } } } },
+      // Get total received from investments (what supplier actually got)
+      const totalReceived = await db.collection('supplier_payouts').aggregate([
+        { $match: { supplierId: userId, status: 'COMPLETED' } },
+        { $group: { _id: null, total: { $sum: { $toLong: '$netAmount' } } } },
+      ]).toArray();
+
+      // Get total amount raised (net after insurance cut)
+      const totalRaised = await db.collection('invoices').aggregate([
+        { $match: { supplierId: userId, amountRaised: { $exists: true } } },
+        { $group: { _id: null, total: { $sum: { $toLong: '$amountRaised' } } } },
       ]).toArray();
 
       userStats = {
@@ -66,6 +73,7 @@ export async function GET(request: NextRequest) {
         totalInvoicesCreated: supplierInvoices.reduce((sum, s) => sum + s.count, 0),
         totalAmountFinanced: supplierInvoices.reduce((sum, s) => sum + s.totalAmount, 0),
         totalReceived: totalReceived[0]?.total || 0,
+        totalRaised: totalRaised[0]?.total || 0, // Total raised from investors
       };
     } else if (userType === 'BUYER') {
       // Buyer stats

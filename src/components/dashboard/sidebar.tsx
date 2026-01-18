@@ -17,7 +17,10 @@ import {
     User,
     CreditCard,
     LogOut,
-    DollarSign
+    DollarSign,
+    AlertTriangle,
+    ShoppingCart,
+    Coins
 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -37,11 +40,14 @@ const getRoutes = (userType?: string) => {
     const buyerRoutes = [
         { label: "Pending Requests", icon: FileText, href: "/dashboard/requests" },
         { label: "Settlements", icon: CreditCard, href: "/dashboard/settlements" },
+        { label: "Disputes", icon: AlertTriangle, href: "/dashboard/disputes" },
     ]
 
     const investorRoutes = [
         { label: "Marketplace", icon: TrendingUp, href: "/dashboard/market" },
+        { label: "Secondary Market", icon: ShoppingCart, href: "/dashboard/secondary" },
         { label: "Portfolio", icon: Briefcase, href: "/dashboard/portfolio" },
+        { label: "Earnings", icon: Coins, href: "/dashboard/earnings" },
         { label: "My Orders", icon: FileText, href: "/dashboard/orders" },
     ]
 

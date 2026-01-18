@@ -478,10 +478,22 @@ impl SanginiInvoiceContract {
         let current_time = env.ledger().timestamp();
         let rate_config = get_rate_config(env);
         let base_amount = invoice.amount;
-        let days_since_creation = (current_time - invoice.created_at) / 86400;
-        let interest_rate = if current_time > invoice.due_date { rate_config.penalty_rate } else { rate_config.base_interest_rate };
-        let interest = (base_amount * (interest_rate as i128) * (days_since_creation as i128)) / (10000 * 365);
-        base_amount + interest
+        
+        if current_time > invoice.due_date {
+            // Overdue: base interest until due date + penalty after
+            let days_until_due = (invoice.due_date - invoice.created_at) / 86400;
+            let days_overdue = (current_time - invoice.due_date) / 86400;
+            
+            let base_interest = (base_amount * (rate_config.base_interest_rate as i128) * (days_until_due as i128)) / (10000 * 365);
+            let penalty_interest = (base_amount * (rate_config.penalty_rate as i128) * (days_overdue as i128)) / (10000 * 365);
+            
+            base_amount + base_interest + penalty_interest
+        } else {
+            // Not overdue: just base interest from creation
+            let days_since_creation = (current_time - invoice.created_at) / 86400;
+            let interest = (base_amount * (rate_config.base_interest_rate as i128) * (days_since_creation as i128)) / (10000 * 365);
+            base_amount + interest
+        }
     }
 
     fn distribute_settlement(env: &Env, invoice_id: &String, total_amount: i128) -> Result<(), ContractError> {

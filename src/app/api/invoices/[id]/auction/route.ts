@@ -158,14 +158,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Total tokens = invoice amount (1:1 tokenization)
     const totalTokens = invoice.amount;
 
+    // Store as Unix timestamps (seconds) for consistency
+    const auctionStartTimestamp = Math.floor(now.getTime() / 1000);
+    const auctionEndTimestamp = Math.floor(auctionEnd.getTime() / 1000);
+
     // Update invoice
     await db.collection('invoices').updateOne(
       { _id: invoice._id },
       {
         $set: {
           status: 'FUNDING',
-          auctionStart: now,
-          auctionEnd,
+          auctionStart: auctionStartTimestamp,  // Store as Unix timestamp
+          auctionEnd: auctionEndTimestamp,      // Store as Unix timestamp
           startPrice,
           minPrice,
           priceDropRate: 50, // Default 0.5% per hour
@@ -182,8 +186,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       success: true,
       txHash,
       auction: {
-        startTime: now.toISOString(),
-        endTime: auctionEnd.toISOString(),
+        startTime: new Date(auctionStartTimestamp * 1000).toISOString(),
+        endTime: new Date(auctionEndTimestamp * 1000).toISOString(),
         startPrice,
         minPrice,
         totalTokens,

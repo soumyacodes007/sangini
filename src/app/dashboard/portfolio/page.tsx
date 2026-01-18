@@ -15,6 +15,8 @@ interface Holding {
   tokenAmount: string;
   purchasePrice: string;
   currentValue: string;
+  expectedReturn: string;
+  unrealizedProfit: string;
   status: string;
   dueDate: number;
   description?: string;
@@ -115,22 +117,43 @@ export default function PortfolioPage() {
         throw new Error('Transaction failed on-chain');
       }
 
-      // Extract order ID from transaction result if available
-      // For now, generate a placeholder - the contract returns the order ID
-      const orderId = `ORD-${Date.now()}`;
+      // Extract order ID from transaction result
+      // The create_sell_order function returns Result<String, ContractError>
+      let orderId: string;
+      try {
+        if (txResponse.returnValue) {
+          // Parse the return value - it's a String wrapped in Result::Ok
+          const returnVal = StellarSdk.scValToNative(txResponse.returnValue);
+          // If it's a string directly, use it; if it's an object with ok/err, extract ok
+          orderId = typeof returnVal === 'string' ? returnVal : (returnVal.ok || returnVal);
+          console.log('Extracted order ID from contract:', orderId);
+        } else {
+          // Fallback: generate based on timestamp (will cause issues but better than failing)
+          console.warn('No return value from contract, using fallback order ID');
+          orderId = `ORD-${Date.now()}`;
+        }
+      } catch (parseError) {
+        console.error('Failed to parse order ID from result:', parseError);
+        orderId = `ORD-${Date.now()}`;
+      }
 
       // Step 4: Confirm order in database
-      await fetch('/api/orders', {
+      const confirmRes = await fetch('/api/orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           txHash: response.hash,
           orderId,
           invoiceId: order.invoiceId,
+          invoiceDbId: order.invoiceDbId, // Include for invoice lookup
           tokenAmount,
           pricePerToken,
         }),
       });
+
+      if (!confirmRes.ok) {
+        console.error('Failed to confirm order:', await confirmRes.text());
+      }
     } else if (response.status === 'ERROR') {
       throw new Error(`Transaction error: ${response.errorResult}`);
     }
@@ -139,10 +162,10 @@ export default function PortfolioPage() {
   };
 
   // Calculate totals
-  const totalValue = holdings.reduce((sum, h) => sum + parseInt(h.currentValue || '0'), 0) / 10000000;
   const totalInvested = holdings.reduce((sum, h) => sum + parseInt(h.purchasePrice || '0'), 0) / 10000000;
-  const totalPnL = totalValue - totalInvested;
-  const pnlPercentage = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
+  const totalExpectedReturn = holdings.reduce((sum, h) => sum + parseInt(h.expectedReturn || '0'), 0) / 10000000;
+  const totalUnrealizedProfit = holdings.reduce((sum, h) => sum + parseInt(h.unrealizedProfit || '0'), 0) / 10000000;
+  const pnlPercentage = totalInvested > 0 ? (totalUnrealizedProfit / totalInvested) * 100 : 0;
 
   if (loading) {
     return (
@@ -169,36 +192,37 @@ export default function PortfolioPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Invested</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalValue.toFixed(2)} XLM</div>
+            <div className="text-2xl font-bold">{totalInvested.toFixed(2)} XLM</div>
             <p className="text-xs text-muted-foreground">{holdings.length} positions</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Invested</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Expected Return</CardTitle>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalInvested.toFixed(2)} XLM</div>
+            <div className="text-2xl font-bold text-blue-500">{totalExpectedReturn.toFixed(2)} XLM</div>
+            <p className="text-xs text-muted-foreground">At maturity</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unrealized P&L</CardTitle>
+            <CardTitle className="text-sm font-medium">Unrealized Profit</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-              {totalPnL >= 0 ? '+' : ''}{totalPnL.toFixed(2)} XLM
+            <div className={`text-2xl font-bold ${totalUnrealizedProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+              {totalUnrealizedProfit >= 0 ? '+' : ''}{totalUnrealizedProfit.toFixed(2)} XLM
             </div>
             <p className="text-xs text-muted-foreground">
-              {pnlPercentage >= 0 ? '+' : ''}{pnlPercentage.toFixed(1)}%
+              {pnlPercentage >= 0 ? '+' : ''}{pnlPercentage.toFixed(1)}% ROI
             </p>
           </CardContent>
         </Card>
@@ -226,9 +250,9 @@ export default function PortfolioPage() {
                   <tr className="border-b">
                     <th className="text-left py-3 px-2 font-medium text-muted-foreground">Invoice</th>
                     <th className="text-right py-3 px-2 font-medium text-muted-foreground">Tokens</th>
-                    <th className="text-right py-3 px-2 font-medium text-muted-foreground">Cost Basis</th>
-                    <th className="text-right py-3 px-2 font-medium text-muted-foreground">Current Value</th>
-                    <th className="text-right py-3 px-2 font-medium text-muted-foreground">P&L</th>
+                    <th className="text-right py-3 px-2 font-medium text-muted-foreground">Invested</th>
+                    <th className="text-right py-3 px-2 font-medium text-muted-foreground">Expected Return</th>
+                    <th className="text-right py-3 px-2 font-medium text-muted-foreground">Profit</th>
                     <th className="text-center py-3 px-2 font-medium text-muted-foreground">Status</th>
                     <th className="text-right py-3 px-2 font-medium text-muted-foreground">Action</th>
                   </tr>
@@ -236,10 +260,10 @@ export default function PortfolioPage() {
                 <tbody>
                   {holdings.map((holding) => {
                     const tokens = parseInt(holding.tokenAmount) / 10000000;
-                    const cost = parseInt(holding.purchasePrice) / 10000000;
-                    const value = parseInt(holding.currentValue) / 10000000;
-                    const pnl = value - cost;
-                    const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
+                    const invested = parseInt(holding.purchasePrice) / 10000000;
+                    const expectedReturn = parseInt(holding.expectedReturn) / 10000000;
+                    const profit = parseInt(holding.unrealizedProfit) / 10000000;
+                    const profitPct = invested > 0 ? (profit / invested) * 100 : 0;
 
                     return (
                       <tr key={holding.invoiceId} className="border-b last:border-0 hover:bg-muted/50">
@@ -260,26 +284,32 @@ export default function PortfolioPage() {
                           {tokens.toFixed(2)}
                         </td>
                         <td className="text-right py-3 px-2">
-                          {cost.toFixed(2)} XLM
+                          {invested.toFixed(2)} XLM
                         </td>
-                        <td className="text-right py-3 px-2 font-medium">
-                          {value.toFixed(2)} XLM
+                        <td className="text-right py-3 px-2 font-medium text-blue-500">
+                          {expectedReturn.toFixed(2)} XLM
                         </td>
-                        <td className={`text-right py-3 px-2 font-medium ${pnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                          {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} ({pnlPct.toFixed(1)}%)
+                        <td className={`text-right py-3 px-2 font-medium ${profit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {profit >= 0 ? '+' : ''}{profit.toFixed(2)} ({profitPct.toFixed(1)}%)
                         </td>
                         <td className="text-center py-3 px-2">
                           <StatusBadge status={holding.status} size="sm" />
                         </td>
                         <td className="text-right py-3 px-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleSell(holding)}
-                          >
-                            <Tag className="h-3 w-3 mr-1" />
-                            Sell
-                          </Button>
+                          {holding.status !== 'SETTLED' && holding.status !== 'DEFAULTED' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSell(holding)}
+                            >
+                              <Tag className="h-3 w-3 mr-1" />
+                              Sell
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {holding.status === 'SETTLED' ? 'Paid out' : 'Claimed'}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );

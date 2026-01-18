@@ -2,10 +2,12 @@
 
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useStore } from '@/lib/store';
 
 export function useAuth() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const disconnectWallet = useStore((state) => state.disconnectWallet);
 
   const isLoading = status === 'loading';
   const isAuthenticated = status === 'authenticated';
@@ -35,7 +37,14 @@ export function useAuth() {
   };
 
   const logout = async () => {
+    // Clear Zustand wallet state
+    disconnectWallet();
+    
+    // Clear NextAuth session
     await signOut({ redirect: false });
+    
+    // Note: Freighter wallet connection will be cleared on next page load
+    // since useFreighterWallet checks session state
     router.push('/');
   };
 

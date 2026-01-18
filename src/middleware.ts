@@ -29,7 +29,7 @@ export default withAuth(
 
     // Buyers only routes - but ADMIN can access too
     // For demo/testing, allow all authenticated users
-    if ((pathname.startsWith('/dashboard/requests') || pathname.startsWith('/dashboard/settlements')) &&
+    if ((pathname.startsWith('/dashboard/requests') || pathname.startsWith('/dashboard/settlements') || pathname.startsWith('/dashboard/disputes')) &&
       !token) {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }

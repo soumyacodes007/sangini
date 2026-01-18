@@ -19,85 +19,144 @@ export async function GET() {
       return NextResponse.json({ holdings: [] });
     }
 
-    // Get user's investments - check both wallet address formats and handle legacy records
-    // Legacy records may not have 'status' field, so we accept records without it too
+    // Get user's investments - exclude SOLD investments (they're no longer holdings)
     const investments = await db.collection('investments').find({
       $and: [
-        // Match either wallet address field
         {
           $or: [
             { investor: walletAddress },
             { investorAddress: walletAddress },
           ],
         },
-        // Accept COMPLETED status OR no status field (legacy records)
         {
           $or: [
             { status: 'COMPLETED' },
             { status: { $exists: false } },
           ],
         },
+        {
+          // Exclude SOLD investments
+          status: { $ne: 'SOLD' },
+        },
       ],
     }).toArray();
 
     console.log('Portfolio - Found investments for wallet:', walletAddress, 'Count:', investments.length);
 
-    // Get invoice details for each investment
-    const holdings = await Promise.all(
-      investments.map(async (inv) => {
-        // Try multiple ways to find the invoice - supports different ID formats
-        let invoice = null;
+    // Check for distributions (settled investments)
+    const distributions = await db.collection('investor_distributions').find({
+      investorAddress: walletAddress,
+    }).toArray();
 
-        // First try by MongoDB _id if it's a valid ObjectId
-        if (inv.invoiceId && ObjectId.isValid(inv.invoiceId)) {
-          invoice = await db.collection('invoices').findOne({
-            _id: new ObjectId(inv.invoiceId),
-          });
-        }
+    // Group investments by invoice to aggregate multiple investments
+    const holdingsMap = new Map<string, {
+      invoiceId: string;
+      invoiceDbId: string;
+      tokenAmount: bigint;
+      purchasePrice: bigint;
+      currentValue: bigint;
+      expectedReturn: bigint;
+      status: string;
+      dueDate?: Date;
+      description?: string;
+    }>();
 
-        // If not found, try by invoiceId or onChainId strings
-        if (!invoice && (inv.invoiceId || inv.onChainInvoiceId)) {
-          invoice = await db.collection('invoices').findOne({
-            $or: [
-              { invoiceId: inv.invoiceId },
-              { invoiceId: inv.onChainInvoiceId },
-              { onChainId: inv.invoiceId },
-              { onChainId: inv.onChainInvoiceId },
-            ].filter(q => Object.values(q)[0] !== undefined),
-          });
-        }
+    for (const inv of investments) {
+      // Try multiple ways to find the invoice
+      let invoice = null;
 
-        if (!invoice) return null;
+      if (inv.invoiceId && ObjectId.isValid(inv.invoiceId)) {
+        invoice = await db.collection('invoices').findOne({
+          _id: new ObjectId(inv.invoiceId),
+        });
+      }
 
-        // Calculate current value (face value at maturity)
-        const tokenAmount = parseInt(inv.tokenAmount || '0');
-        // Support both field names for backwards compatibility
-        const purchasePrice = parseInt(inv.purchasePrice || inv.investedAmount || inv.tokenAmount || '0');
+      if (!invoice && (inv.invoiceId || inv.onChainInvoiceId)) {
+        invoice = await db.collection('invoices').findOne({
+          $or: [
+            { invoiceId: inv.invoiceId },
+            { invoiceId: inv.onChainInvoiceId },
+            { onChainId: inv.invoiceId },
+            { onChainId: inv.onChainInvoiceId },
+          ].filter(q => Object.values(q)[0] !== undefined),
+        });
+      }
 
-        // Current value is face value (1:1 with tokens) if not settled
-        const currentValue = invoice.status === 'SETTLED'
-          ? tokenAmount // Full face value
-          : invoice.status === 'DEFAULTED'
-            ? Math.floor(tokenAmount * 0.5) // 50% insurance coverage
-            : tokenAmount; // Face value at maturity
+      if (!invoice) continue;
 
-        return {
+      const invoiceKey = invoice._id.toString();
+      const tokenAmount = BigInt(inv.tokenAmount || '0');
+      const purchasePrice = BigInt(inv.purchasePrice || inv.investedAmount || inv.tokenAmount || '0');
+
+      // Determine status: SETTLED if distribution exists, else use invoice status
+      const distribution = distributions.find(d =>
+        d.invoiceId === invoiceKey ||
+        d.onChainInvoiceId === invoice.onChainId
+      );
+
+      // Map invoice status to user-friendly status
+      let status = invoice.status;
+      if (distribution) {
+        status = 'SETTLED';
+      } else if (invoice.status === 'FUNDING' || invoice.status === 'APPROVED') {
+        status = 'FUNDED'; // User has invested, so show as FUNDED for their holding
+      }
+
+      // Calculate current value based on status
+      let currentValue = tokenAmount;
+      let expectedReturn = tokenAmount; // Face value of tokens
+      
+      if (status === 'SETTLED' && distribution) {
+        // Settled - use actual distribution amount
+        currentValue = BigInt(distribution.distributionAmount || tokenAmount.toString());
+        expectedReturn = currentValue;
+      } else if (status === 'DEFAULTED') {
+        // Defaulted - 50% insurance coverage
+        currentValue = purchasePrice / BigInt(2);
+        expectedReturn = currentValue;
+      } else if (invoice.status === 'FUNDED' || invoice.status === 'VERIFIED' || invoice.status === 'FUNDING') {
+        // Active - show expected return (face value) vs current value (what they paid)
+        currentValue = purchasePrice; // Current value = what they invested
+        expectedReturn = tokenAmount; // Expected return = face value of tokens
+      }
+
+      // Aggregate if same invoice already exists
+      const existing = holdingsMap.get(invoiceKey);
+      if (existing) {
+        existing.tokenAmount += tokenAmount;
+        existing.purchasePrice += purchasePrice;
+        existing.currentValue += currentValue;
+        existing.expectedReturn += expectedReturn;
+      } else {
+        holdingsMap.set(invoiceKey, {
           invoiceId: invoice.invoiceId || invoice.onChainId || invoice._id.toString(),
           invoiceDbId: invoice._id.toString(),
-          tokenAmount: inv.tokenAmount,
-          purchasePrice: purchasePrice.toString(),
-          currentValue: currentValue.toString(),
-          status: invoice.status,
+          tokenAmount,
+          purchasePrice,
+          currentValue,
+          expectedReturn,
+          status,
           dueDate: invoice.dueDate,
           description: invoice.description,
-        };
-      })
-    );
+        });
+      }
+    }
 
-    // Filter out null values
-    const validHoldings = holdings.filter(h => h !== null);
+    // Convert to array and format values
+    const holdings = Array.from(holdingsMap.values()).map(h => ({
+      invoiceId: h.invoiceId,
+      invoiceDbId: h.invoiceDbId,
+      tokenAmount: h.tokenAmount.toString(),
+      purchasePrice: h.purchasePrice.toString(),
+      currentValue: h.currentValue.toString(),
+      expectedReturn: h.expectedReturn.toString(),
+      unrealizedProfit: (h.expectedReturn - h.purchasePrice).toString(),
+      status: h.status,
+      dueDate: h.dueDate,
+      description: h.description,
+    }));
 
-    return NextResponse.json({ holdings: validHoldings });
+    return NextResponse.json({ holdings });
   } catch (error) {
     console.error('Portfolio fetch error:', error);
     return NextResponse.json(

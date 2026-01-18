@@ -68,22 +68,40 @@ export async function GET(request: NextRequest) {
       .toArray();
     const sellerMap = new Map(sellers.map((s) => [s._id.toString(), s]));
 
-    // Transform response
+    // Transform response with correct field names for frontend
     const response = orders.map((order) => {
       const seller = order.sellerId ? sellerMap.get(order.sellerId.toString()) : null;
+
+      // Safe BigInt calculations - handle undefined/null values
+      const tokensRemaining = order.tokensRemaining || order.tokenAmount || '0';
+      const tokensFilled = order.tokensFilled || '0';
+      const pricePerToken = order.pricePerToken || '0';
+
+      // Calculate total price safely
+      let totalPrice = '0';
+      try {
+        totalPrice = (BigInt(tokensRemaining) * BigInt(pricePerToken) / BigInt(10000000)).toString();
+      } catch {
+        totalPrice = '0';
+      }
+
       return {
         id: order._id.toString(),
         orderId: order.orderId,
         invoiceId: order.invoiceId,
-        seller: {
+        invoiceDbId: order.invoiceDbId,
+        seller: order.sellerAddress, // Return address directly, not nested object
+        sellerDetails: {
           id: order.sellerId?.toString(),
           name: seller?.name || seller?.companyName,
           address: order.sellerAddress,
         },
-        tokenAmount: order.tokenAmount,
-        pricePerToken: order.pricePerToken,
-        tokensRemaining: order.tokensRemaining,
-        totalValue: (BigInt(order.tokensRemaining || order.tokenAmount) * BigInt(order.pricePerToken)).toString(),
+        tokenAmount: tokensRemaining, // Return remaining as the sellable amount
+        filledAmount: tokensFilled,   // Add filled amount for display
+        pricePerToken: pricePerToken,
+        totalPrice: totalPrice,       // Frontend expects totalPrice, not totalValue
+        totalValue: totalPrice,       // Keep for backwards compatibility
+        tokensRemaining: tokensRemaining,
         status: order.status,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
@@ -182,18 +200,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has enough tokens (from investments or as supplier)
+    console.log('=== Token Balance Calculation ===');
     console.log('Looking for investments with wallet:', walletAddress);
-    console.log('Invoice ID:', invoice._id.toString());
-    console.log('Contract Invoice ID:', contractInvoiceId);
+    console.log('Invoice DB ID:', invoice._id.toString());
+    console.log('Invoice invoiceId:', invoice.invoiceId);
+    console.log('Contract Invoice ID (onChainId):', contractInvoiceId);
 
-    // ISSUE-3 FIX: Search by both investor and investorAddress, handle missing status
+    // Build comprehensive query to find investments
+    const invoiceIdVariants = [
+      invoice._id.toString(),
+      invoice.invoiceId,
+      contractInvoiceId,
+    ].filter(Boolean);
+
+    console.log('Searching for invoice ID variants:', invoiceIdVariants);
+
+    // FIXED: Search by all possible invoice ID formats
     const userInvestments = await db.collection('investments').find({
       $and: [
-        // Match invoice by multiple IDs
+        // Match invoice by any ID variant
         {
           $or: [
-            { invoiceId: invoice._id.toString() },
-            { onChainInvoiceId: contractInvoiceId },
+            { invoiceId: { $in: invoiceIdVariants } },
+            { onChainInvoiceId: { $in: invoiceIdVariants } },
           ],
         },
         // Match investor by multiple fields
@@ -213,7 +242,15 @@ export async function POST(request: NextRequest) {
       ],
     }).toArray();
 
-    console.log('Found investments:', userInvestments.length, userInvestments);
+    console.log('Found investments:', userInvestments.length);
+    userInvestments.forEach((inv, i) => {
+      console.log(`Investment ${i}:`, {
+        invoiceId: inv.invoiceId,
+        onChainInvoiceId: inv.onChainInvoiceId,
+        tokenAmount: inv.tokenAmount,
+        investor: inv.investor,
+      });
+    });
 
     const isSupplier = invoice.supplierAddress === walletAddress;
 
@@ -234,22 +271,35 @@ export async function POST(request: NextRequest) {
       console.log('Adding investment tokens:', investmentTokens.toString());
     }
 
-    // Subtract any tokens already listed in open sell orders
+    console.log('Tokens from investments:', availableTokens.toString());
+
+    // Subtract tokens already listed in open sell orders for this invoice
+    // Use invoiceDbId as the primary key to avoid duplicates
     const existingOrders = await db.collection('sellOrders').find({
-      $or: [
-        { invoiceId: contractInvoiceId },
-        { invoiceId: invoice._id.toString() },
-      ],
+      invoiceDbId: invoice._id.toString(), // Use single field, not $or
       sellerAddress: walletAddress,
       status: { $in: ['OPEN', 'PARTIALLY_FILLED'] },
     }).toArray();
 
+    // Deduplicate by order _id (in case of any duplicates)
+    const seenOrderIds = new Set<string>();
+    let tokensInOrders = BigInt(0);
+
     for (const order of existingOrders) {
+      const orderId = order._id.toString();
+      if (seenOrderIds.has(orderId)) {
+        console.log('Skipping duplicate order:', orderId);
+        continue;
+      }
+      seenOrderIds.add(orderId);
+
       const orderTokens = BigInt(order.tokensRemaining || order.tokenAmount || '0');
+      tokensInOrders += orderTokens;
       availableTokens -= orderTokens;
-      console.log('Subtracting order tokens:', orderTokens.toString());
+      console.log('Subtracting order tokens:', orderTokens.toString(), 'from order:', orderId);
     }
 
+    console.log('Total tokens in open orders:', tokensInOrders.toString());
     console.log('Final available tokens:', availableTokens.toString());
 
     if (availableTokens <= BigInt(0)) {
@@ -307,7 +357,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { txHash, orderId, invoiceId, tokenAmount, pricePerToken } = body;
+    const { txHash, orderId, invoiceId, invoiceDbId, tokenAmount, pricePerToken } = body;
 
     if (!txHash || !orderId || !invoiceId || !tokenAmount || !pricePerToken) {
       return NextResponse.json(
@@ -318,10 +368,13 @@ export async function PUT(request: NextRequest) {
 
     const db = await getDb();
 
+    console.log('Creating sell order:', { orderId, invoiceId, invoiceDbId, tokenAmount, pricePerToken });
+
     // Create order record
     await db.collection('sellOrders').insertOne({
       orderId,
       invoiceId,
+      invoiceDbId, // Store for secondary market invoice lookup
       sellerId: new ObjectId(session.user.id),
       sellerAddress: session.user.walletAddress,
       tokenAmount,

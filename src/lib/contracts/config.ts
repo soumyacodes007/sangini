@@ -158,16 +158,25 @@ export function calculateInterest(
 ): string {
     const principal = parseFloat(amount);
     const now = Math.floor(Date.now() / 1000);
-    const daysElapsed = Math.floor((now - createdAt) / 86400);
-
-    const rate = isOverdue
-        ? CONTRACT_CONFIG.PENALTY_RATE
-        : CONTRACT_CONFIG.BASE_INTEREST_RATE;
-
-    // Simple interest: P * R * T / (100 * 365)
-    const interest = (principal * rate * daysElapsed) / (10000 * 365);
-
-    return (principal + interest).toString();
+    
+    if (isOverdue) {
+        // For overdue invoices: base interest until due date + penalty after
+        const daysUntilDue = Math.floor((dueDate - createdAt) / 86400);
+        const daysOverdue = Math.floor((now - dueDate) / 86400);
+        
+        // Base interest for the period until due date
+        const baseInterest = (principal * CONTRACT_CONFIG.BASE_INTEREST_RATE * daysUntilDue) / (10000 * 365);
+        
+        // Penalty interest for overdue period
+        const penaltyInterest = (principal * CONTRACT_CONFIG.PENALTY_RATE * daysOverdue) / (10000 * 365);
+        
+        return (principal + baseInterest + penaltyInterest).toString();
+    } else {
+        // Not overdue: just base interest from creation
+        const daysElapsed = Math.floor((now - createdAt) / 86400);
+        const interest = (principal * CONTRACT_CONFIG.BASE_INTEREST_RATE * daysElapsed) / (10000 * 365);
+        return (principal + interest).toString();
+    }
 }
 
 // Calculate current auction price
