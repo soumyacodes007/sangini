@@ -1,0 +1,14 @@
+/Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/deps/serde-408741836a126a85.d: /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/build/serde-39c42836e7bdc9af/out/private.rs
+
+/Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/deps/libserde-408741836a126a85.rlib: /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/build/serde-39c42836e7bdc9af/out/private.rs
+
+/Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/deps/libserde-408741836a126a85.rmeta: /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/build/serde-39c42836e7bdc9af/out/private.rs
+
+/Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/harsh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/build/serde-39c42836e7bdc9af/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/build/serde-39c42836e7bdc9af/out

@@ -1,0 +1,7 @@
+interface InvoiceAgent {
+    mutate func increment();
+    mutate func create_invoice();
+    mutate func reset();
+    query func get_count() -> uint;
+    query func get_invoice_count() -> uint
+}

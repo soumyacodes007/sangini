@@ -25,11 +25,25 @@ export default function DashboardPage() {
     const platform = stats?.platform
     const userStats = stats?.user
 
+    // Get dashboard title based on user type
+    const getDashboardTitle = () => {
+        switch (userType) {
+            case 'SUPPLIER':
+                return 'Supplier Dashboard'
+            case 'INVESTOR':
+                return 'Investor Dashboard'
+            case 'BUYER':
+                return 'Buyer Dashboard'
+            default:
+                return 'Dashboard'
+        }
+    }
+
     return (
         <div className="p-8 space-y-8">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-white">Dashboard</h1>
+                    <h1 className="text-3xl font-bold tracking-tight text-white">{getDashboardTitle()}</h1>
                     <p className="text-white/50 mt-1">
                         Welcome back{user?.name ? `, ${user.name}` : ''}!
                     </p>

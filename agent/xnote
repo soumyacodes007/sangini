@@ -1,0 +1,5 @@
+deploy -e -f /Users/harsh/Desktop/sangini/agent/target/wasm32-unknown-unknown/release/invoice_agent.wasm -p  /Users/harsh/Desktop/sangini/agent/invoice_agent.widl
+
+{"batch_author":"p-gas1m-4.asia-south1.main.weilliptic.net-8000","batch_id":"0286ff7fbec908b9a4eb2285cb60b643cd6100eb36a45ceed695133bf905f9d3","block_height":478607,"contract_address":"aaaaaas5zw2kyj724q7pn2nndho2yecyfeutgowuapg4oxyvxsw5iyorwm","creation_time":"2026-01-18T05:27:49Z","method_kind":"Mutate","status":"Finalized","tx_idx":0,"txn_result":"{\"Ok\":\"null\"}","txn_ticket":"aaaaaasujiakqzduwipdd6m4oag2xjpepultiidbjwuyqfew3gysishqwm"}
+
+execute -n aaaaaas5zw2kyj724q7pn2nndho2yecyfeutgowuapg4oxyvxsw5iyorwm -m 
